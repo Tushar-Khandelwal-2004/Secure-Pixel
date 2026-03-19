@@ -3,9 +3,9 @@ import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
-
+import { PrismaClient } from "@prisma/client";
 const app = express();
-
+const prisma = new PrismaClient();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -56,6 +56,13 @@ app.post("/upload", upload.single("image"), async (req, res) => {
 
   const absolutePath = path.resolve(req.file.path);
   const normalizedPath = absolutePath.replace(/\\/g, "/");
+   await prisma.image.create({
+    data: {
+      image_id,
+      owner_id,
+      file_path: normalizedPath,
+    },
+  });
   let response:Response|null=null;
   try {
     response = await fetch("http://localhost:8000/process-image", {
@@ -82,6 +89,13 @@ app.post("/upload", upload.single("image"), async (req, res) => {
     ai_result: aiResult,
   });
 });
+
+
+app.get("/images",async (req,res)=>{
+  const images=await prisma.image.findMany();
+  res.json(images);
+})
+
 app.listen(3000, () => {
   console.log("Server running on port 3000");
 });
