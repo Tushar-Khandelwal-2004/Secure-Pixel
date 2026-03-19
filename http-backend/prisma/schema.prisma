@@ -13,6 +13,5 @@ model Image {
   file_path  String
   upload_time DateTime @default(now())
   phash      String?  
-
   createdAt  DateTime @default(now())
 }

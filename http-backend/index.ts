@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
 import { PrismaClient } from "@prisma/client";
+
 const app = express();
 const prisma = new PrismaClient();
 app.use(express.json());
@@ -53,48 +54,72 @@ app.post("/upload", upload.single("image"), async (req, res) => {
   }
 
   const image_id = path.parse(req.file.filename).name;
-
   const absolutePath = path.resolve(req.file.path);
   const normalizedPath = absolutePath.replace(/\\/g, "/");
-   await prisma.image.create({
-    data: {
-      image_id,
-      owner_id,
-      file_path: normalizedPath,
-    },
-  });
-  let response:Response|null=null;
+
   try {
-    response = await fetch("http://localhost:8000/process-image", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        image_path: normalizedPath,
+    // 1. Initial DB Record Creation
+    await prisma.image.create({
+      data: {
         image_id,
         owner_id,
-      }),
+        file_path: normalizedPath
+      },
     });
-  } catch (err) {
-    console.log("AI service error", err);
+
+    // 2. Call FastAPI Service
+    let aiResult = null;
+    try {
+      const response = await fetch("http://localhost:8000/process-image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image_path: normalizedPath,
+          image_id,
+          owner_id,
+        }),
+      });
+
+      if (response.ok) {
+        aiResult = await response.json();
+
+        // 3. Update DB with the generated phash
+        if (aiResult && aiResult.phash) {
+          await prisma.image.update({
+            where: { image_id },
+            data: { phash: aiResult.phash },
+          });
+        }
+      } else {
+        console.error("AI service responded with status:", response.status);
+      }
+    } catch (err) {
+      console.log("AI service error", err);
+    }
+
+    res.json({
+      message: "Image uploaded & processed",
+      image_id,
+      ai_result: aiResult,
+    });
+
+  } catch (dbError) {
+    console.error("Database error:", dbError);
+    res.status(500).json({ error: "Failed to save image metadata" });
   }
-
-
-  const aiResult = await response?.json();
-
-  res.json({
-    message: "Image uploaded & processed",
-    image_id,
-    ai_result: aiResult,
-  });
 });
 
 
-app.get("/images",async (req,res)=>{
-  const images=await prisma.image.findMany();
-  res.json(images);
-})
+app.get("/images", async (req, res) => {
+  try {
+    const images = await prisma.image.findMany();
+    res.json(images);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch images" });
+  }
+});
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");
