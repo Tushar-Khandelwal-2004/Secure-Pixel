@@ -8,11 +8,12 @@ datasource db {
 }
 
 model Image {
-  image_id    String   @id
-  owner_id    String
-  file_path   String
-  upload_time DateTime @default(now())
-  phash       String?
-  embedding   Float[]
-  createdAt   DateTime @default(now())
+  image_id          String   @id
+  owner_id          String
+  file_path         String
+  secured_file_path String?
+  upload_time       DateTime @default(now())
+  phash             String?
+  embedding         Float[]
+  createdAt         DateTime @default(now())
 }
