@@ -85,28 +85,39 @@ app.post("/upload", upload.single("image"), async (req, res) => {
       if (response.ok) {
         aiResult = await response.json();
 
-        // Update DB with BOTH the phash and the embedding array
+        // Update DB with phash, embedding, AND the new secured file path
         if (aiResult) {
           await prisma.image.update({
             where: { image_id },
             data: {
               phash: aiResult.phash,
-              embedding: aiResult.embedding // Save the 2048-d array
+              embedding: aiResult.embedding,
+              secured_file_path: aiResult.secured_file_path
             },
           });
         }
-      }
-      else {
+      } else {
         console.error("AI service responded with status:", response.status);
       }
     } catch (err) {
       console.log("AI service error", err);
     }
 
+    // Build the public URLs for the user
+    const originalUrl = `/images/${req.file.filename}`;
+    const securedUrl = aiResult?.secured_filename ? `/images/${aiResult.secured_filename}` : null;
+
     res.json({
-      message: "Image uploaded & processed",
+      message: "Image uploaded, processed & secured successfully",
       image_id,
-      ai_result: aiResult,
+      urls: {
+        original: originalUrl,
+        secured: securedUrl
+      },
+      ai_metrics: {
+        phash: aiResult?.phash,
+        dimensions: `${aiResult?.width}x${aiResult?.height}`
+      }
     });
 
   } catch (dbError) {
