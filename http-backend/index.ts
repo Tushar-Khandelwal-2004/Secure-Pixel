@@ -85,14 +85,18 @@ app.post("/upload", upload.single("image"), async (req, res) => {
       if (response.ok) {
         aiResult = await response.json();
 
-        // 3. Update DB with the generated phash
-        if (aiResult && aiResult.phash) {
+        // Update DB with BOTH the phash and the embedding array
+        if (aiResult) {
           await prisma.image.update({
             where: { image_id },
-            data: { phash: aiResult.phash },
+            data: {
+              phash: aiResult.phash,
+              embedding: aiResult.embedding // Save the 2048-d array
+            },
           });
         }
-      } else {
+      }
+      else {
         console.error("AI service responded with status:", response.status);
       }
     } catch (err) {
