@@ -30,3 +30,31 @@ def encode_lsb(image_path: str, secret_data: str, output_path: str):
             break
             
     img.save(output_path, "PNG")
+
+def decode_lsb(image_path: str) -> str:
+    try:
+        img = Image.open(image_path).convert('RGB')
+        pixels = img.load()
+        width, height = img.size
+        
+        binary_data = ""
+        for y in range(height):
+            for x in range(width):
+                r, g, b = pixels[x, y]
+                binary_data += str(r & 1)
+                binary_data += str(g & 1)
+                binary_data += str(b & 1)
+                
+        decoded_text = ""
+        for i in range(0, len(binary_data), 8):
+            byte = binary_data[i:i+8]
+            if len(byte) < 8:
+                break
+            decoded_text += chr(int(byte, 2))
+            
+            if "====END====" in decoded_text:
+                return decoded_text.split("====END====")[0]
+                
+        return None
+    except Exception:
+        return None

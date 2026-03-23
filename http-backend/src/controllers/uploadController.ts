@@ -37,6 +37,21 @@ export const uploadImage = async (req: Request, res: Response): Promise<any> => 
           secured_file_path: aiResult.secured_file_path,
         },
       });
+
+      // 3.5 Push the new vector to the live FAISS index in Python
+      try {
+        await fetch("http://localhost:8000/faiss/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_id: image_id,
+            embedding: aiResult.embedding
+          })
+        });
+      } catch (faissError) {
+        // We log this but don't crash the upload if the sync fails
+        console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
+      }
     }
 
     // 4. Build URLs and respond
