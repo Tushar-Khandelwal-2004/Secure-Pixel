@@ -3,7 +3,9 @@ from pydantic import BaseModel
 from PIL import Image
 import imagehash
 import os
-
+from typing import List
+from app.services.watermark import encode_lsb, decode_lsb
+from app.core.faiss_manager import faiss_db
 from app.core.model_loader import get_embedding
 from app.services.watermark import encode_lsb
 
@@ -13,6 +15,16 @@ class ImageRequest(BaseModel):
     image_path: str
     image_id: str
     owner_id: str
+
+class FaissSyncRequest(BaseModel):
+    items: List[dict] # List of {image_id, embedding}
+
+class FaissAddRequest(BaseModel):
+    image_id: str
+    embedding: List[float]
+
+class FaissSearchRequest(BaseModel):
+    embedding: List[float]
 
 @router.post("/process-image")
 def process_image(req: ImageRequest):
@@ -62,3 +74,23 @@ def extract_features(req: ImageRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error extracting features: {str(e)}")
+
+@router.post("/extract-watermark")
+def extract_watermark(req: dict):
+    payload = decode_lsb(req.get("image_path"))
+    return {"payload": payload}
+
+@router.post("/faiss/sync")
+def sync_faiss(req: FaissSyncRequest):
+    faiss_db.sync_database(req.items)
+    return {"status": "synced", "total": faiss_db.index.ntotal}
+
+@router.post("/faiss/add")
+def add_faiss(req: FaissAddRequest):
+    faiss_db.add_vector(req.image_id, req.embedding)
+    return {"status": "added"}
+
+@router.post("/faiss/search")
+def search_faiss(req: FaissSearchRequest):
+    results = faiss_db.search(req.embedding)
+    return {"matches": results}
