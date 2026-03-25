@@ -2,7 +2,7 @@ import numpy as np
 import faiss
 
 class FaissManager:
-    def __init__(self, dimension=2048):
+    def __init__(self, dimension=512):
         self.dimension = dimension
         self.index = faiss.IndexFlatIP(self.dimension)
         self.id_map = {} # Maps FAISS internal int IDs to your string image_ids
