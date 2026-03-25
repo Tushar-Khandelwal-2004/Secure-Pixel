@@ -11,7 +11,8 @@ export async function processImageWithAI(imagePath: string, imageId: string, own
     });
 
     if (!response.ok) {
-      console.error(`AI service responded with status: ${response.status}`);
+      const errorBody = await response.text();
+      console.error(`AI service responded with status: ${response.status}. Details: ${errorBody}`);
       return null;
     }
 
