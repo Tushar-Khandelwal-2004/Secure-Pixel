@@ -74,16 +74,28 @@ export const detectImage = async (req: Request, res: Response): Promise<any> => 
     fs.unlinkSync(absolutePath); // Cleanup
 
     // Check if the top FAISS match is above our 0.90 threshold
-    if (matches.length > 0 && matches[0].score > 0.90) {
-      return res.json({
-        message: "Duplicate Detected (Layer 3)",
-        confidence: "Medium-High",
-        method: "AI ResNet Embedding (FAISS)",
-        matches: matches
-      });
+    if (matches.length > 0) {
+      const topScore = matches[0].score;
+
+      if (topScore >= 0.95) {
+        return res.json({
+          message: "Duplicate Detected (Layer 3)",
+          confidence: "High",
+          method: "AI CLIP Embedding (FAISS)",
+          match_type: "Identical or lightly compressed",
+          matches: matches
+        });
+      } else if (topScore >= 0.90) {
+        return res.json({
+          message: "Suspected Derivative Detected (Layer 3)",
+          confidence: "Medium",
+          method: "AI CLIP Embedding (FAISS)",
+          match_type: "Heavily edited, cropped, or filtered",
+          matches: matches
+        });
+      }
     }
 
-    // return res.json({ message: "No duplicates found. Image is unique." });
     return res.json({
       message: "No duplicates found. Image is unique.",
       highest_ai_scores: matches

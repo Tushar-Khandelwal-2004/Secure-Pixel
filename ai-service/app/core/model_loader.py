@@ -1,27 +1,24 @@
 import torch
-import torchvision.transforms as transforms
-import torchvision.models as models
+from transformers import CLIPProcessor, CLIPModel
 
-print("Loading ResNet50 model into memory...")
-weights = models.ResNet50_Weights.DEFAULT
-model = models.resnet50(weights=weights)
+print("Loading OpenAI CLIP model into memory. This may take a minute on the first run...")
+model_id = "openai/clip-vit-base-patch32"
+model = CLIPModel.from_pretrained(model_id)
+processor = CLIPProcessor.from_pretrained(model_id)
 model.eval()
-
-# Strip classification layer for embeddings
-feature_extractor = torch.nn.Sequential(*(list(model.children())[:-1]))
-
-# Standard image preprocessing for ResNet
-preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+print("CLIP Model loaded successfully!")
 
 def get_embedding(img):
-    img_tensor = preprocess(img).unsqueeze(0)
+    inputs = processor(images=img, return_tensors="pt")
     with torch.no_grad():
-        embedding_tensor = feature_extractor(img_tensor).flatten()
-        return embedding_tensor.tolist()
-
-print("ResNet50 Model loaded successfully!")
+        outputs = model.get_image_features(**inputs)
+        
+        # Safely extract the tensor whether HuggingFace returns a raw Tensor or a Wrapper Object
+        if hasattr(outputs, "image_embeds"):
+            embeddings = outputs.image_embeds
+        elif hasattr(outputs, "pooler_output"):
+            embeddings = outputs.pooler_output
+        else:
+            embeddings = outputs # It's already a raw tensor
+            
+        return embeddings.flatten().tolist()
