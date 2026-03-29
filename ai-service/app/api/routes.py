@@ -64,11 +64,26 @@ def extract_features(req: ImageRequest):
     try:
         img = Image.open(req.image_path).convert('RGB')
         
-        calculated_phash = str(imagehash.phash(img))
+        # Generate the 8 spatial variations
+        variations = [
+            img,
+            img.rotate(90, expand=True),
+            img.rotate(180, expand=True),
+            img.rotate(270, expand=True),
+            img.transpose(Image.FLIP_LEFT_RIGHT),
+            img.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True),
+            img.transpose(Image.FLIP_LEFT_RIGHT).rotate(180, expand=True),
+            img.transpose(Image.FLIP_LEFT_RIGHT).rotate(270, expand=True)
+        ]
+        
+        # Calculate pHash for all 8 variations
+        phash_list = [str(imagehash.phash(v)) for v in variations]
+        
+        # We only need the embedding of the original image for Layer 3
         embedding_list = get_embedding(img)
             
         return {
-            "phash": calculated_phash,
+            "phash_variations": phash_list,
             "embedding": embedding_list
         }
     except Exception as e:
