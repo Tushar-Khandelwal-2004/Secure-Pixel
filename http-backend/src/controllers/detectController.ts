@@ -27,7 +27,7 @@ export const detectImage = async (req: Request, res: Response): Promise<any> => 
       body: JSON.stringify({ image_path: absolutePath })
     });
     const { payload } = await wmResponse.json();
-    
+
     console.log("Layer 1 Debug -> Payload:", payload, "| Length:", payload ? payload.length : "null");
 
     if (payload && payload.includes("SPXL")) {
@@ -48,21 +48,36 @@ export const detectImage = async (req: Request, res: Response): Promise<any> => 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_path: absolutePath, image_id: "temp", owner_id: "temp" })
     });
-    const { phash, embedding } = await featResponse.json();
+
+    // Notice we are now destructuring phash_variations instead of phash
+    const { phash_variations, embedding } = await featResponse.json();
 
     const allHashes = await prisma.image.findMany({ select: { image_id: true, phash: true } });
-    for (const img of allHashes) {
-      if (img.phash && getHammingDistance(phash, img.phash) <= 5) {
-        fs.unlinkSync(absolutePath);
-        return res.json({
-          message: "Duplicate Detected (Layer 2)",
-          confidence: "High",
-          method: "Perceptual Hashing",
-          matched_image_id: img.image_id
-        });
+
+    let layer2Match = null;
+
+    // Check every database image against all 8 variations of the uploaded image
+    for (const dbImg of allHashes) {
+      if (!dbImg.phash) continue;
+
+      for (const testHash of phash_variations) {
+        if (getHammingDistance(testHash, dbImg.phash) <= 5) {
+          layer2Match = dbImg.image_id;
+          break; // Break the inner loop if we find a match
+        }
       }
+      if (layer2Match) break; // Break the outer loop if we found a match
     }
 
+    if (layer2Match) {
+      fs.unlinkSync(absolutePath);
+      return res.json({
+        message: "Duplicate Detected (Layer 2)",
+        confidence: "High",
+        method: "Perceptual Hashing (Spatial Match)",
+        matched_image_id: layer2Match
+      });
+    }
     // ==========================================
     // LAYER 3: AI Vector Similarity (FAISS)
     // ==========================================
