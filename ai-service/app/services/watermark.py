@@ -1,60 +1,37 @@
-from PIL import Image
+import cv2
+import traceback
+from imwatermark import WatermarkEncoder, WatermarkDecoder
 
-def encode_lsb(image_path: str, secret_data: str, output_path: str):
-    img = Image.open(image_path).convert('RGB')
-    secret_data += "====END===="
-    binary_data = ''.join(format(ord(char), '08b') for char in secret_data)
-    
-    pixels = img.load()
-    width, height = img.size
-    data_idx = 0
-    data_len = len(binary_data)
-    
-    for y in range(height):
-        for x in range(width):
-            if data_idx < data_len:
-                r, g, b = pixels[x, y]
-                if data_idx < data_len:
-                    r = (r & 254) | int(binary_data[data_idx])
-                    data_idx += 1
-                if data_idx < data_len:
-                    g = (g & 254) | int(binary_data[data_idx])
-                    data_idx += 1
-                if data_idx < data_len:
-                    b = (b & 254) | int(binary_data[data_idx])
-                    data_idx += 1
-                pixels[x, y] = (r, g, b)
-            else:
-                break
-        if data_idx >= data_len:
-            break
-            
-    img.save(output_path, "PNG")
-
-def decode_lsb(image_path: str) -> str:
+def encode_watermark(image_path: str, secret_data: str, output_path: str):
     try:
-        img = Image.open(image_path).convert('RGB')
-        pixels = img.load()
-        width, height = img.size
-        
-        binary_data = ""
-        for y in range(height):
-            for x in range(width):
-                r, g, b = pixels[x, y]
-                binary_data += str(r & 1)
-                binary_data += str(g & 1)
-                binary_data += str(b & 1)
-                
-        decoded_text = ""
-        for i in range(0, len(binary_data), 8):
-            byte = binary_data[i:i+8]
-            if len(byte) < 8:
-                break
-            decoded_text += chr(int(byte, 2))
+        bgr = cv2.imread(image_path)
+        if bgr is None:
+            return
             
-            if "====END====" in decoded_text:
-                return decoded_text.split("====END====")[0]
-                
-        return None
-    except Exception:
+        encoder = WatermarkEncoder()
+        watermark_bytes = secret_data.encode('utf-8')
+        encoder.set_watermark('bytes', watermark_bytes)
+        
+        # Switched to dwtDctSvd for extreme stability
+        bgr_encoded = encoder.encode(bgr, 'dwtDctSvd') 
+        
+        cv2.imwrite(output_path, bgr_encoded)
+    except Exception as e:
+        print(f"ENCODE FAILED: {str(e)}")
+
+def decode_watermark(image_path: str, payload_length: int = 4) -> str:
+    try:
+        bgr = cv2.imread(image_path)
+        if bgr is None:
+            return None
+            
+        decoder = WatermarkDecoder('bytes', payload_length * 8)
+        
+        # Switched to dwtDctSvd to match encoder
+        watermark_bytes = decoder.decode(bgr, 'dwtDctSvd') 
+        
+        decoded_text = watermark_bytes.decode('utf-8', errors='ignore').strip('\x00')
+        return decoded_text
+    except Exception as e:
+        print(f"DECODE FAILED: {str(e)}")
         return None

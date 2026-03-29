@@ -4,10 +4,9 @@ from PIL import Image
 import imagehash
 import os
 from typing import List
-from app.services.watermark import encode_lsb, decode_lsb
+from app.services.watermark import encode_watermark, decode_watermark
 from app.core.faiss_manager import faiss_db
 from app.core.model_loader import get_embedding
-from app.services.watermark import encode_lsb
 
 router = APIRouter()
 
@@ -17,7 +16,7 @@ class ImageRequest(BaseModel):
     owner_id: str
 
 class FaissSyncRequest(BaseModel):
-    items: List[dict] # List of {image_id, embedding}
+    items: List[dict]
 
 class FaissAddRequest(BaseModel):
     image_id: str
@@ -37,12 +36,12 @@ def process_image(req: ImageRequest):
         calculated_phash = str(imagehash.phash(img))
         embedding_list = get_embedding(img)
             
-        payload = f"SecurePixel_Owner_{req.owner_id}_ID_{req.image_id}"
+        payload = "SPXL"
         dir_name = os.path.dirname(req.image_path)
         secured_filename = f"{req.image_id}-secured.png"
         secured_image_path = os.path.join(dir_name, secured_filename)
         
-        encode_lsb(req.image_path, payload, secured_image_path)
+        encode_watermark(req.image_path, payload, secured_image_path)
         normalized_secured_path = secured_image_path.replace("\\", "/")
 
         return {
@@ -77,7 +76,7 @@ def extract_features(req: ImageRequest):
 
 @router.post("/extract-watermark")
 def extract_watermark(req: dict):
-    payload = decode_lsb(req.get("image_path"))
+    payload = decode_watermark(req.get("image_path"), 4)
     return {"payload": payload}
 
 @router.post("/faiss/sync")
