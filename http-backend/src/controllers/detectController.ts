@@ -27,14 +27,16 @@ export const detectImage = async (req: Request, res: Response): Promise<any> => 
       body: JSON.stringify({ image_path: absolutePath })
     });
     const { payload } = await wmResponse.json();
+    
+    console.log("Layer 1 Debug -> Payload:", payload, "| Length:", payload ? payload.length : "null");
 
-    if (payload && payload.includes("SecurePixel")) {
+    if (payload && payload.includes("SPXL")) {
       fs.unlinkSync(absolutePath); // Cleanup
       return res.json({
         message: "Duplicate Detected (Layer 1)",
         confidence: "100%",
-        method: "LSB Steganography",
-        extracted_data: payload
+        method: "Robust Frequency Watermarking (SVD)",
+        extracted_data: "SecurePixel Authorized Asset"
       });
     }
 
