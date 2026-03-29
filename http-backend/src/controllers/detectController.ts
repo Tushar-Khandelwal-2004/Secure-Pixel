@@ -49,33 +49,29 @@ export const detectImage = async (req: Request, res: Response): Promise<any> => 
       body: JSON.stringify({ image_path: absolutePath, image_id: "temp", owner_id: "temp" })
     });
 
-    // Notice we are now destructuring phash_variations instead of phash
     const { phash_variations, embedding } = await featResponse.json();
 
-    const allHashes = await prisma.image.findMany({ select: { image_id: true, phash: true } });
+    const conditions = phash_variations.map((hash: string) =>
+      `bit_count(('x' || phash)::bit(64) # ('x' || '${hash}')::bit(64)) <= 5`
+    ).join(' OR ');
 
-    let layer2Match = null;
+    const query = `
+    SELECT image_id 
+    FROM "Image" 
+    WHERE phash IS NOT NULL 
+    AND (${conditions})
+    LIMIT 1;
+    `;
 
-    // Check every database image against all 8 variations of the uploaded image
-    for (const dbImg of allHashes) {
-      if (!dbImg.phash) continue;
+    const layer2Matches: any[] = await prisma.$queryRawUnsafe(query);
 
-      for (const testHash of phash_variations) {
-        if (getHammingDistance(testHash, dbImg.phash) <= 5) {
-          layer2Match = dbImg.image_id;
-          break; // Break the inner loop if we find a match
-        }
-      }
-      if (layer2Match) break; // Break the outer loop if we found a match
-    }
-
-    if (layer2Match) {
+    if (layer2Matches && layer2Matches.length > 0) {
       fs.unlinkSync(absolutePath);
       return res.json({
         message: "Duplicate Detected (Layer 2)",
         confidence: "High",
-        method: "Perceptual Hashing (Spatial Match)",
-        matched_image_id: layer2Match
+        method: "Perceptual Hashing (Spatial Match & DB Optimized)",
+        matched_image_id: layer2Matches[0].image_id
       });
     }
     // ==========================================
