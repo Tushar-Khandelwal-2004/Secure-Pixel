@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import prisma from "./lib/prisma";
 import imageRoutes from "./routes/imageRoutes";
+import authRoutes from "./routes/authRoutes";
 const app = express();
 
 app.use(express.json());
@@ -13,6 +14,7 @@ app.use("/images", express.static(uploadDir));
 
 // Mount the routes
 app.use("/", imageRoutes);
+app.use("/auth", authRoutes);
 
 
 async function syncFAISS() {
