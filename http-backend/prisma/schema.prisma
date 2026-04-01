@@ -7,9 +7,36 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id            String   @id @default(uuid())
+  first_name    String
+  last_name     String
+  email         String   @unique
+  password      String   // Will store the bcrypt hash
+  
+  // Verification & Auth
+  is_verified   Boolean  @default(false)
+  otp_code      String?  // Temporarily stores the OTP
+  otp_expiry    DateTime?
+  
+  // Profile Info
+  x_handle      String?
+  insta_handle  String?
+  profile_photo String?  // Stores the file path or URL
+  
+  // Relationships
+  images        Image[]  
+  
+  created_at    DateTime @default(now())
+}
+
 model Image {
   image_id          String   @id
+  
+  // Foreign Key linking back to the User
   owner_id          String
+  owner             User     @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  
   file_path         String
   secured_file_path String?
   upload_time       DateTime @default(now())
