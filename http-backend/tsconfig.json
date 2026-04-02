@@ -1,8 +1,13 @@
 {
+  "ts-node": {
+    "files": true
+  },
   "compilerOptions": {
     "target": "ES2020",
     "module": "CommonJS",
     "esModuleInterop": true,
-    "strict": true
-  }
+    "strict": true,
+    "typeRoots": ["./node_modules/@types", "./src/types"]
+  },
+  "include": ["src/**/*"]
 }
