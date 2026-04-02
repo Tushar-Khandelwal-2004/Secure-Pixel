@@ -2,9 +2,13 @@ import { Request, Response } from "express";
 import path from "path";
 import prisma from "../lib/prisma";
 import { processImageWithAI } from "../services/aiClient";
+import { AuthRequest } from "../types/AuthRequest";
+export const uploadImage = async (req: AuthRequest, res: Response): Promise<any> => {
+  const owner_id = req.user?.userId;
 
-export const uploadImage = async (req: Request, res: Response): Promise<any> => {
-  const owner_id = req.body.owner_id || "demo-user";
+  if (!owner_id) {
+    return res.status(401).json({ error: "Unauthorized. User ID missing." });
+  }
 
   if (!req.file) {
     return res.status(400).json({ error: "No image uploaded" });
@@ -15,7 +19,6 @@ export const uploadImage = async (req: Request, res: Response): Promise<any> => 
   const normalizedPath = absolutePath.replace(/\\/g, "/");
 
   try {
-    // 1. Initial DB Record Creation
     await prisma.image.create({
       data: {
         image_id,
@@ -24,10 +27,8 @@ export const uploadImage = async (req: Request, res: Response): Promise<any> => 
       },
     });
 
-    // 2. Call FastAPI Service via our AI Client
     const aiResult = await processImageWithAI(normalizedPath, image_id, owner_id);
 
-    // 3. Update DB if AI processing succeeded
     if (aiResult) {
       await prisma.image.update({
         where: { image_id },
@@ -38,7 +39,6 @@ export const uploadImage = async (req: Request, res: Response): Promise<any> => 
         },
       });
 
-      // 3.5 Push the new vector to the live FAISS index in Python
       try {
         await fetch("http://localhost:8000/faiss/add", {
           method: "POST",
@@ -49,12 +49,10 @@ export const uploadImage = async (req: Request, res: Response): Promise<any> => 
           })
         });
       } catch (faissError) {
-        // We log this but don't crash the upload if the sync fails
         console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
       }
     }
 
-    // 4. Build URLs and respond
     const originalUrl = `/images/${req.file.filename}`;
     const securedUrl = aiResult?.secured_filename ? `/images/${aiResult.secured_filename}` : null;
 
@@ -76,9 +74,18 @@ export const uploadImage = async (req: Request, res: Response): Promise<any> => 
   }
 };
 
-export const getImages = async (req: Request, res: Response) => {
+export const getImages = async (req: AuthRequest, res: Response): Promise<any> => {
   try {
-    const images = await prisma.image.findMany();
+    const owner_id = req.user?.userId;
+
+    if (!owner_id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const images = await prisma.image.findMany({
+      where: { owner_id }
+    });
+
     res.json(images);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch images" });
