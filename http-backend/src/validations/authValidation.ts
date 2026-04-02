@@ -40,3 +40,10 @@ export const resendOtpSchema = z.object({
     email: z.string().email("Invalid email address")
   })
 });
+
+export const signinSchema = z.object({
+  body: z.object({
+    email: z.string().email("Invalid email address"),
+    password: z.string().min(1, "Password is required") // We just check if it's empty here
+  })
+});

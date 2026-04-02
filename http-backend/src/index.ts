@@ -3,6 +3,7 @@ import path from "path";
 import prisma from "./lib/prisma";
 import imageRoutes from "./routes/imageRoutes";
 import authRoutes from "./routes/authRoutes";
+import cookieParser from "cookie-parser";
 const app = express();
 
 app.use(express.json());
@@ -13,6 +14,7 @@ const uploadDir = path.join(process.cwd(), "uploads");
 app.use("/images", express.static(uploadDir));
 
 // Mount the routes
+app.use(cookieParser());
 app.use("/", imageRoutes);
 app.use("/auth", authRoutes);
 
