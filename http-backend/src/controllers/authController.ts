@@ -139,6 +139,16 @@ export const resendOtp = async (req: Request, res: Response): Promise<any> => {
             return res.status(400).json({ error: "User is already verified. Please sign in." });
         }
 
+        if (user.otp_expiry) {
+            const timeGenerated = user.otp_expiry.getTime() - (15 * 60 * 1000);
+            const secondsSinceLastOtp = (Date.now() - timeGenerated) / 1000;
+
+            if (secondsSinceLastOtp < 60) {
+                const timeLeft = Math.ceil(60 - secondsSinceLastOtp);
+                return res.status(429).json({ error: `Please wait ${timeLeft} seconds before requesting a new OTP.` });
+            }
+        }
+
         // Generate fresh OTP
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
