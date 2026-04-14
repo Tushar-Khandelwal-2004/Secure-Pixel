@@ -24,7 +24,7 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
             }
             const saltRounds = 10;
             const hashedPassword = await bcrypt.hash(password, saltRounds);
-            const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const otpCode = crypto.randomInt(100000, 1000000).toString();
             const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
             await prisma.user.update({
                 where: { email },
@@ -53,7 +53,7 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // 3. Generate a secure 6-digit OTP and set expiry (15 mins)
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpCode = crypto.randomInt(100000, 1000000).toString();
         const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
         // 4. Create the unverified user in the database
@@ -150,7 +150,7 @@ export const resendOtp = async (req: Request, res: Response): Promise<any> => {
         }
 
         // Generate fresh OTP
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpCode = crypto.randomInt(100000, 1000000).toString();
         const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
         await prisma.user.update({
