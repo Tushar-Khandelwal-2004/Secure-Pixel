@@ -87,6 +87,9 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const cursor = req.query.cursor as string | undefined;
+
     const images = await prisma.image.findMany({
       where: { owner_id },
       select: {
@@ -96,10 +99,19 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
         file_path: true,
         secured_file_path: true,
       },
-      orderBy: { upload_time: "desc" }
+      orderBy: { upload_time: "desc" },
+      take: limit + 1,
+      ...(cursor && {
+        cursor: { image_id: cursor },
+        skip: 1,
+      }),
     });
 
-    const safeImages = images.map((img) => {
+    const hasNextPage = images.length > limit;
+    const pageItems = hasNextPage ? images.slice(0, limit) : images;
+    const nextCursor = hasNextPage ? pageItems[pageItems.length - 1].image_id : null;
+
+    const safeImages = pageItems.map((img) => {
       const filename = img.file_path.split("/").pop();
       const securedFilename = img.secured_file_path?.split("/").pop();
 
@@ -114,7 +126,14 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
       };
     });
 
-    return res.json(safeImages);
+    return res.json({
+      data: safeImages,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor,
+      }
+    });
   } catch (error) {
     return res.status(500).json({ error: "Failed to fetch images" });
   }
