@@ -48,6 +48,14 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
   if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
   const absolutePath = path.resolve(req.file.path).replace(/\\/g, "/");
+  let fileDeleted = false;
+
+  const cleanupFile = () => {
+    if (!fileDeleted && fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+      fileDeleted = true;
+    }
+  };
 
   try {
     // ==========================================
@@ -65,10 +73,8 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     if (payload && payload.startsWith("SPXL:")) {
       const actualImageId = payload.split(":")[1];
       if (!actualImageId) {
-        if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
         return res.status(500).json({ error: "Malformed watermark payload" });
       }
-      fs.unlinkSync(absolutePath);
       const ownerInfo = await getOwnerDetails(actualImageId);
       return res.json({
         message: "Duplicate Detected (Layer 1)",
@@ -91,13 +97,11 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     const { phash_variations, embedding } = (await featResponse.json()) as FeatureResponse;
 
     if (!Array.isArray(phash_variations)) {
-      if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
       return res.status(400).json({ error: "Invalid feature data received from AI service." });
     }
 
     for (const hash of phash_variations) {
       if (!HEX_PHASH_REGEX.test(hash)) {
-        if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
         return res.status(400).json({ error: "Invalid feature data received from AI service." });
       }
     }
@@ -119,8 +123,6 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     const layer2Matches = layer2Results.flat().filter(Boolean);
 
     if (layer2Matches && layer2Matches.length > 0) {
-      fs.unlinkSync(absolutePath); // Cleanup
-      
       const matchedId = layer2Matches[0].image_id;
       const ownerInfo = await getOwnerDetails(matchedId);
 
@@ -142,8 +144,6 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
       body: JSON.stringify({ embedding })
     });
     const { matches } = (await faissResponse.json()) as FaissSearchResponse;
-
-    fs.unlinkSync(absolutePath); // Cleanup
 
     // Check if the top FAISS match is above our 0.90 threshold
     if (matches.length > 0) {
@@ -181,7 +181,8 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
 
   } catch (error) {
     console.error("Detection error:", error);
-    if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
     res.status(500).json({ error: "Detection pipeline failed" });
+  } finally {
+    cleanupFile();
   }
 };
