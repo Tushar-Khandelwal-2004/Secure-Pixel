@@ -88,12 +88,35 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
     }
 
     const images = await prisma.image.findMany({
-      where: { owner_id }
+      where: { owner_id },
+      select: {
+        image_id: true,
+        upload_time: true,
+        phash: true,
+        file_path: true,
+        secured_file_path: true,
+      },
+      orderBy: { upload_time: "desc" }
     });
 
-    res.json(images);
+    const safeImages = images.map((img) => {
+      const filename = img.file_path.split("/").pop();
+      const securedFilename = img.secured_file_path?.split("/").pop();
+
+      return {
+        image_id: img.image_id,
+        upload_time: img.upload_time,
+        phash: img.phash,
+        urls: {
+          original: filename ? `/images/${filename}` : null,
+          secured: securedFilename ? `/images/${securedFilename}` : null,
+        }
+      };
+    });
+
+    return res.json(safeImages);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch images" });
+    return res.status(500).json({ error: "Failed to fetch images" });
   }
 };
 
