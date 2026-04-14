@@ -6,7 +6,7 @@ import os
 from typing import List
 from app.services.watermark import encode_watermark, decode_watermark
 from app.core.faiss_manager import faiss_db
-from app.core.model_loader import get_embedding
+from app.core.model_loader import get_embedding, model
 
 router = APIRouter()
 
@@ -24,6 +24,14 @@ class FaissAddRequest(BaseModel):
 
 class FaissSearchRequest(BaseModel):
     embedding: List[float]
+
+@router.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "faiss_vectors": faiss_db.index.ntotal
+    }
 
 @router.post("/process-image")
 def process_image(req: ImageRequest):

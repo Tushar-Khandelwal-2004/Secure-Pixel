@@ -21,6 +21,47 @@ app.use(cors({
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
+
+app.get("/health", async (_req, res) => {
+    const health: Record<string, string> = {
+        status: "ok",
+        timestamp: new Date().toISOString(),
+    };
+
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        health.database = "ok";
+    } catch {
+        health.database = "error";
+        health.status = "degraded";
+    }
+
+    try {
+        await redisClient.ping();
+        health.redis = "ok";
+    } catch {
+        health.redis = "error";
+        health.status = "degraded";
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
+    try {
+        const aiRes = await fetch(`${aiServiceUrl}/health`, { signal: controller.signal });
+        health.ai_service = aiRes.ok ? "ok" : "error";
+        if (!aiRes.ok) health.status = "degraded";
+    } catch {
+        health.ai_service = "unreachable";
+        health.status = "degraded";
+    } finally {
+        clearTimeout(timeout);
+    }
+
+    const httpStatus = health.status === "ok" ? 200 : 503;
+    res.status(httpStatus).json(health);
+});
+
 app.use(globalApiLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
