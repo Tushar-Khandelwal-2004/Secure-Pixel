@@ -54,8 +54,8 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
       }
     }
 
-    const originalUrl = `/images/${req.file.filename}`;
-    const securedUrl = aiResult?.secured_filename ? `/images/${aiResult.secured_filename}` : null;
+    const originalUrl = `/uploads/${req.file.filename}`;
+    const securedUrl = aiResult?.secured_filename ? `/uploads/${aiResult.secured_filename}` : null;
 
     res.json({
       message: "Image uploaded, processed & secured successfully",

@@ -28,7 +28,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
 
-RUN chown -R node:node /app
+RUN mkdir -p /app/uploads && \
+    chmod 777 /app/uploads && \
+    chown -R node:node /app
 
 USER node
 
