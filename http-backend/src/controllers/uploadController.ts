@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
+import fs from "fs";
 import path from "path";
 import prisma from "../lib/prisma";
 import { processImageWithAI } from "../services/aiClient";
 import { AuthRequest } from "../types/AuthRequest";
+
 export const uploadImage = async (req: AuthRequest, res: Response): Promise<any> => {
   const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
   const owner_id = req.user?.userId;
@@ -20,44 +22,45 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
   const normalizedPath = absolutePath.replace(/\\/g, "/");
 
   try {
-    await prisma.image.create({
-      data: {
-        image_id,
-        owner_id,
-        file_path: normalizedPath,
-      },
-    });
-
     const aiResult = await processImageWithAI(normalizedPath, image_id, owner_id);
 
-    if (aiResult) {
-      await prisma.image.update({
-        where: { image_id },
+    if (!aiResult) {
+      if (fs.existsSync(normalizedPath)) fs.unlinkSync(normalizedPath);
+      return res.status(503).json({
+        error: "AI processing service is unavailable. Please try again later."
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.image.create({
         data: {
+          image_id,
+          owner_id,
+          file_path: normalizedPath,
           phash: aiResult.phash,
           embedding: aiResult.embedding,
           secured_file_path: aiResult.secured_file_path,
         },
       });
+    });
 
-      try {
-        await fetch(`${aiServiceUrl}/faiss/add`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_id: image_id,
-            embedding: aiResult.embedding
-          })
-        });
-      } catch (faissError) {
-        console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
-      }
+    try {
+      await fetch(`${aiServiceUrl}/faiss/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_id,
+          embedding: aiResult.embedding
+        })
+      });
+    } catch (faissError) {
+      console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
     }
 
-    const originalUrl = `/uploads/${req.file.filename}`;
-    const securedUrl = aiResult?.secured_filename ? `/uploads/${aiResult.secured_filename}` : null;
+    const originalUrl = `/images/${req.file.filename}`;
+    const securedUrl = aiResult.secured_filename ? `/images/${aiResult.secured_filename}` : null;
 
-    res.json({
+    return res.json({
       message: "Image uploaded, processed & secured successfully",
       image_id,
       urls: {
@@ -65,13 +68,14 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
         secured: securedUrl,
       },
       ai_metrics: {
-        phash: aiResult?.phash,
-        dimensions: `${aiResult?.width}x${aiResult?.height}`,
+        phash: aiResult.phash,
+        dimensions: `${aiResult.width}x${aiResult.height}`,
       },
     });
   } catch (error) {
-    console.error("Database error:", error);
-    res.status(500).json({ error: "Failed to save image metadata" });
+    console.error("Upload error:", error);
+    if (fs.existsSync(normalizedPath)) fs.unlinkSync(normalizedPath);
+    return res.status(500).json({ error: "Failed to process and save image." });
   }
 };
 
