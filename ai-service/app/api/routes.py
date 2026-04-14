@@ -36,7 +36,7 @@ def process_image(req: ImageRequest):
         calculated_phash = str(imagehash.phash(img))
         embedding_list = get_embedding(img)
             
-        payload = "SPXL"
+        payload = f"SPXL:{req.image_id}"
         dir_name = os.path.dirname(req.image_path)
         secured_filename = f"{req.image_id}-secured.png"
         secured_image_path = os.path.join(dir_name, secured_filename)
@@ -91,7 +91,7 @@ def extract_features(req: ImageRequest):
 
 @router.post("/extract-watermark")
 def extract_watermark(req: dict):
-    payload = decode_watermark(req.get("image_path"), 4)
+    payload = decode_watermark(req.get("image_path"), 41)
     return {"payload": payload}
 
 @router.post("/faiss/sync")
