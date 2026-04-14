@@ -61,13 +61,13 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     console.log("Layer 1 Debug -> Payload:", payload, "| Length:", payload ? payload.length : "null");
 
     if (payload && payload.startsWith("SPXL:")) {
-      fs.unlinkSync(absolutePath); // Cleanup
-
       const actualImageId = payload.split(":")[1];
-      const ownerInfo = actualImageId
-        ? await getOwnerDetails(actualImageId)
-        : null;
-
+      if (!actualImageId) {
+        if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+        return res.status(500).json({ error: "Malformed watermark payload" });
+      }
+      fs.unlinkSync(absolutePath);
+      const ownerInfo = await getOwnerDetails(actualImageId);
       return res.json({
         message: "Duplicate Detected (Layer 1)",
         confidence: "100%",
