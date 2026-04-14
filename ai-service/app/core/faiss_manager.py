@@ -9,19 +9,19 @@ class FaissManager:
         self.index_path = index_path
         self.id_map_path = id_map_path
 
-        if os.path.exists(self.index_path):
+        if os.path.exists(self.index_path) and os.path.exists(self.id_map_path):
+            print("Loading FAISS index from disk...")
             self.index = faiss.read_index(self.index_path)
-            if os.path.exists(self.id_map_path):
-                with open(self.id_map_path, "r", encoding="utf-8") as f:
-                    stored_id_map = json.load(f)
-                self.id_map = {int(k): v for k, v in stored_id_map.items()}
-            else:
-                self.id_map = {}
+            with open(self.id_map_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+                self.id_map = {int(k): v for k, v in raw.items()}
+            self.current_id = max(self.id_map.keys()) + 1 if self.id_map else 0
+            print(f"FAISS index loaded with {self.index.ntotal} vectors.")
         else:
+            print("No existing FAISS index found. Starting fresh.")
             self.index = faiss.IndexFlatIP(self.dimension)
             self.id_map = {}
-
-        self.current_id = max(self.id_map.keys(), default=-1) + 1
+            self.current_id = 0
 
     def _save(self):
         faiss.write_index(self.index, self.index_path)
@@ -74,7 +74,4 @@ class FaissManager:
         return results
 
 # Singleton instance
-faiss_db = FaissManager(
-    index_path=os.getenv("FAISS_INDEX_PATH", "faiss.index"),
-    id_map_path=os.getenv("FAISS_ID_MAP_PATH", "faiss_id_map.json")
-)
+faiss_db = FaissManager()
