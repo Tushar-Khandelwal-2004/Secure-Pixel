@@ -6,7 +6,7 @@ import prisma from "./lib/prisma";
 import imageRoutes from "./routes/imageRoutes";
 import authRoutes from "./routes/authRoutes";
 import cookieParser from "cookie-parser";
-import { redisClient } from "./middlewares/rateLimiter";
+import { globalApiLimiter, redisClient } from "./middlewares/rateLimiter";
 
 const app = express();
 const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
@@ -21,6 +21,7 @@ app.use(cors({
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
+app.use(globalApiLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
