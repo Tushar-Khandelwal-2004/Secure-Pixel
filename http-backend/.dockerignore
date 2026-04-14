@@ -1,0 +1,11 @@
+node_modules
+dist
+uploads
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+npm-debug.log*
+coverage
+*.tsbuildinfo

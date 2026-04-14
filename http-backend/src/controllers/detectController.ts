@@ -1,8 +1,27 @@
 import { Response } from "express";
 import path from "path";
 import fs from "fs";
+import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../types/AuthRequest";
+
+interface WatermarkResponse {
+  payload?: string;
+}
+
+interface FeatureResponse {
+  phash_variations: string[];
+  embedding: number[];
+}
+
+interface FaissMatch {
+  image_id: string;
+  score: number;
+}
+
+interface FaissSearchResponse {
+  matches: FaissMatch[];
+}
 
 const getOwnerDetails = async (imageId: string) => {
   const originalImage = await prisma.image.findUnique({
@@ -23,6 +42,7 @@ const getOwnerDetails = async (imageId: string) => {
 };
 
 export const detectImage = async (req: AuthRequest, res: Response): Promise<any> => {
+  const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
   if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
   const absolutePath = path.resolve(req.file.path).replace(/\\/g, "/");
@@ -31,26 +51,28 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     // ==========================================
     // LAYER 1: Watermark Extraction (O(1) Absolute Match)
     // ==========================================
-    const wmResponse = await fetch("http://localhost:8000/extract-watermark", {
+    const wmResponse = await fetch(`${aiServiceUrl}/extract-watermark`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_path: absolutePath })
     });
-    const { payload } = await wmResponse.json();
+    const { payload } = (await wmResponse.json()) as WatermarkResponse;
 
     console.log("Layer 1 Debug -> Payload:", payload, "| Length:", payload ? payload.length : "null");
 
-    if (payload && payload.includes("SPXL")) {
+    if (payload && payload.startsWith("SPXL:")) {
       fs.unlinkSync(absolutePath); // Cleanup
-      
-      // Assuming your payload is the image_id, or contains it
-      const ownerInfo = await getOwnerDetails(payload); 
+
+      const actualImageId = payload.split(":")[1];
+      const ownerInfo = actualImageId
+        ? await getOwnerDetails(actualImageId)
+        : null;
 
       return res.json({
         message: "Duplicate Detected (Layer 1)",
         confidence: "100%",
         method: "Robust Frequency Watermarking (SVD)",
-        matched_image_id: payload,
+        matched_image_id: actualImageId,
         original_creator: ownerInfo || "Creator details protected or not found"
       });
     }
@@ -58,27 +80,34 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     // ==========================================
     // LAYER 2: pHash Exact/Near Match
     // ==========================================
-    const featResponse = await fetch("http://localhost:8000/extract-features", {
+    const featResponse = await fetch(`${aiServiceUrl}/extract-features`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_path: absolutePath, image_id: "temp", owner_id: "temp" })
     });
 
-    const { phash_variations, embedding } = await featResponse.json();
+    const { phash_variations, embedding } = (await featResponse.json()) as FeatureResponse;
 
-    const conditions = phash_variations.map((hash: string) =>
-      `bit_count(('x' || phash)::bit(64) # ('x' || '${hash}')::bit(64)) <= 5`
-    ).join(' OR ');
+    const phashPattern = /^[0-9a-f]{16}$/;
+    if (!Array.isArray(phash_variations) || phash_variations.some((hash: string) => !phashPattern.test(hash))) {
+      if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+      return res.status(400).json({ error: "Malformed pHash variations received from AI service" });
+    }
 
-    const query = `
-    SELECT image_id 
-    FROM "Image" 
-    WHERE phash IS NOT NULL 
-    AND (${conditions})
-    LIMIT 1;
-    `;
-
-    const layer2Matches: any[] = await prisma.$queryRawUnsafe(query);
+    const results = await Promise.all(
+      phash_variations.map((hash: string) =>
+        prisma.$queryRaw<{ image_id: string }[]>(Prisma.sql`
+          SELECT image_id FROM "Image"
+          WHERE phash IS NOT NULL
+          AND bit_count(
+            ('x' || phash)::bit(64) #
+            ('x' || ${hash})::bit(64)
+          ) <= 5
+          LIMIT 1
+        `)
+      )
+    );
+    const layer2Matches = results.flat().filter((r): r is { image_id: string } => Boolean(r));
 
     if (layer2Matches && layer2Matches.length > 0) {
       fs.unlinkSync(absolutePath); // Cleanup
@@ -98,12 +127,12 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     // ==========================================
     // LAYER 3: AI Vector Similarity (FAISS)
     // ==========================================
-    const faissResponse = await fetch("http://localhost:8000/faiss/search", {
+    const faissResponse = await fetch(`${aiServiceUrl}/faiss/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ embedding })
     });
-    const { matches } = await faissResponse.json();
+    const { matches } = (await faissResponse.json()) as FaissSearchResponse;
 
     fs.unlinkSync(absolutePath); // Cleanup
 

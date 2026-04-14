@@ -1,6 +1,21 @@
-export async function processImageWithAI(imagePath: string, imageId: string, ownerId: string) {
+export interface ProcessImageResult {
+  image_id: string;
+  width: number;
+  height: number;
+  phash: string;
+  embedding: number[];
+  secured_file_path: string;
+  secured_filename: string;
+}
+
+export async function processImageWithAI(
+  imagePath: string,
+  imageId: string,
+  ownerId: string
+): Promise<ProcessImageResult | null> {
   try {
-    const response = await fetch("http://localhost:8000/process-image", {
+    const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
+    const response = await fetch(`${aiServiceUrl}/process-image`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -16,7 +31,7 @@ export async function processImageWithAI(imagePath: string, imageId: string, own
       return null;
     }
 
-    return await response.json();
+    return (await response.json()) as ProcessImageResult;
   } catch (error) {
     console.error("AI service communication error:", error);
     return null;
