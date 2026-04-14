@@ -96,3 +96,58 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
     res.status(500).json({ error: "Failed to fetch images" });
   }
 };
+
+export const deleteImage = async (req: AuthRequest, res: Response): Promise<any> => {
+  try {
+    const owner_id = req.user?.userId;
+    const rawId = req.params.id;
+    const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
+    const id = Array.isArray(rawId) ? rawId[0] : rawId;
+
+    if (!owner_id) return res.status(401).json({ error: "Unauthorized" });
+    if (!id) return res.status(400).json({ error: "Image ID is required" });
+
+    const image = await prisma.image.findUnique({
+      where: { image_id: id }
+    });
+
+    if (!image) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+
+    if (image.owner_id !== owner_id) {
+      return res.status(403).json({ error: "You do not have permission to delete this image" });
+    }
+
+    await prisma.image.delete({
+      where: { image_id: id }
+    });
+
+    const filesToDelete = [image.file_path, image.secured_file_path].filter(Boolean) as string[];
+    for (const filePath of filesToDelete) {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    try {
+      const remainingImages = await prisma.image.findMany({
+        where: { embedding: { isEmpty: false } },
+        select: { image_id: true, embedding: true }
+      });
+
+      await fetch(`${aiServiceUrl}/faiss/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: remainingImages })
+      });
+    } catch (faissError) {
+      console.error("Warning: FAISS re-sync after delete failed.", faissError);
+    }
+
+    return res.status(200).json({ message: "Image deleted successfully", image_id: id });
+  } catch (error) {
+    console.error("Delete error:", error);
+    return res.status(500).json({ error: "Failed to delete image" });
+  }
+};
