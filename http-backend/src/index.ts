@@ -1,12 +1,12 @@
 import "dotenv/config";
-import cors from "cors";
 import express from "express";
+import cors from "cors";
 import path from "path";
 import prisma from "./lib/prisma";
-import { redisClient } from "./middlewares/rateLimiter";
 import imageRoutes from "./routes/imageRoutes";
 import authRoutes from "./routes/authRoutes";
 import cookieParser from "cookie-parser";
+import { redisClient } from "./middlewares/rateLimiter";
 
 const app = express();
 const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
