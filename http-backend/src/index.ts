@@ -1,10 +1,13 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import prisma from "./lib/prisma";
+import { redisClient } from "./middlewares/rateLimiter";
 import imageRoutes from "./routes/imageRoutes";
 import authRoutes from "./routes/authRoutes";
 import cookieParser from "cookie-parser";
 const app = express();
+const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -15,6 +18,22 @@ app.use("/images", express.static(uploadDir));
 
 // Mount the routes
 app.use(cookieParser());
+app.get("/healthz", async (_req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.status(200).json({
+            status: "ok",
+            database: "up",
+            redis: redisClient.isReady ? "up" : "degraded"
+        });
+    } catch (_error) {
+        res.status(503).json({
+            status: "degraded",
+            database: "down",
+            redis: redisClient.isReady ? "up" : "down"
+        });
+    }
+});
 app.use("/", imageRoutes);
 app.use("/auth", authRoutes);
 
@@ -28,7 +47,7 @@ async function syncFAISS() {
         });
 
         if (allImages.length > 0) {
-            await fetch("http://localhost:8000/faiss/sync", {
+            await fetch(`${aiServiceUrl}/faiss/sync`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ items: allImages })

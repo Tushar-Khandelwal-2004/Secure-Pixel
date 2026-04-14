@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { createClient } from "redis";
 import RedisStore from "rate-limit-redis";
 import { AuthRequest } from "../types/AuthRequest";
@@ -28,7 +28,7 @@ export const heavyComputeLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 30,
   keyGenerator: (req: AuthRequest) => {
-    return req.user?.userId || req.ip || "unknown-ip";
+    return req.user?.userId || ipKeyGenerator(req.ip || "unknown-ip");
   },
   message: { error: "You have exceeded your image processing quota for this hour. Please try again later." },
   standardHeaders: true,

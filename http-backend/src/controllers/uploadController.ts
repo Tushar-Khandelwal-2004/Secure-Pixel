@@ -4,6 +4,7 @@ import prisma from "../lib/prisma";
 import { processImageWithAI } from "../services/aiClient";
 import { AuthRequest } from "../types/AuthRequest";
 export const uploadImage = async (req: AuthRequest, res: Response): Promise<any> => {
+  const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
   const owner_id = req.user?.userId;
 
   if (!owner_id) {
@@ -40,7 +41,7 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
       });
 
       try {
-        await fetch("http://localhost:8000/faiss/add", {
+        await fetch(`${aiServiceUrl}/faiss/add`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

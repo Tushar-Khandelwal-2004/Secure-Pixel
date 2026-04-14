@@ -74,4 +74,7 @@ class FaissManager:
         return results
 
 # Singleton instance
-faiss_db = FaissManager()
+faiss_db = FaissManager(
+    index_path=os.getenv("FAISS_INDEX_PATH", "faiss.index"),
+    id_map_path=os.getenv("FAISS_ID_MAP_PATH", "faiss_id_map.json")
+)
