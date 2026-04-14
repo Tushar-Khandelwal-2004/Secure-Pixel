@@ -23,6 +23,8 @@ interface FaissSearchResponse {
   matches: FaissMatch[];
 }
 
+const HEX_PHASH_REGEX = /^[0-9a-f]{16}$/i;
+
 const getOwnerDetails = async (imageId: string) => {
   const originalImage = await prisma.image.findUnique({
     where: { image_id: imageId },
@@ -88,26 +90,33 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
 
     const { phash_variations, embedding } = (await featResponse.json()) as FeatureResponse;
 
-    const phashPattern = /^[0-9a-f]{16}$/;
-    if (!Array.isArray(phash_variations) || phash_variations.some((hash: string) => !phashPattern.test(hash))) {
+    if (!Array.isArray(phash_variations)) {
       if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
-      return res.status(400).json({ error: "Malformed pHash variations received from AI service" });
+      return res.status(400).json({ error: "Invalid feature data received from AI service." });
     }
 
-    const results = await Promise.all(
+    for (const hash of phash_variations) {
+      if (!HEX_PHASH_REGEX.test(hash)) {
+        if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+        return res.status(400).json({ error: "Invalid feature data received from AI service." });
+      }
+    }
+
+    const layer2Results = await Promise.all(
       phash_variations.map((hash: string) =>
         prisma.$queryRaw<{ image_id: string }[]>(Prisma.sql`
-          SELECT image_id FROM "Image"
-          WHERE phash IS NOT NULL
+          SELECT image_id 
+          FROM "Image" 
+          WHERE phash IS NOT NULL 
           AND bit_count(
-            ('x' || phash)::bit(64) #
+            ('x' || phash)::bit(64) # 
             ('x' || ${hash})::bit(64)
           ) <= 5
           LIMIT 1
         `)
       )
     );
-    const layer2Matches = results.flat().filter((r): r is { image_id: string } => Boolean(r));
+    const layer2Matches = layer2Results.flat().filter(Boolean);
 
     if (layer2Matches && layer2Matches.length > 0) {
       fs.unlinkSync(absolutePath); // Cleanup
