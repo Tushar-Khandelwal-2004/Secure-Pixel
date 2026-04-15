@@ -57,8 +57,8 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
       console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
     }
 
-    const originalUrl = `/images/${req.file.filename}`;
-    const securedUrl = aiResult.secured_filename ? `/images/${aiResult.secured_filename}` : null;
+    const originalUrl = `/uploads/${req.file.filename}`;
+    const securedUrl = aiResult.secured_filename ? `/uploads/${aiResult.secured_filename}` : null;
 
     return res.json({
       message: "Image uploaded, processed & secured successfully",
@@ -120,8 +120,8 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
         upload_time: img.upload_time,
         phash: img.phash,
         urls: {
-          original: filename ? `/images/${filename}` : null,
-          secured: securedFilename ? `/images/${securedFilename}` : null,
+          original: filename ? `/uploads/${filename}` : null,
+          secured: securedFilename ? `/uploads/${securedFilename}` : null,
         }
       };
     });

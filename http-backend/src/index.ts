@@ -11,7 +11,7 @@ import { globalApiLimiter, redisClient } from "./middlewares/rateLimiter";
 const app = express();
 const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 app.use(cors({
     origin: process.env.ALLOWED_ORIGINS
