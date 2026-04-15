@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "./fetchWithTimeout";
+
 export interface ProcessImageResult {
   image_id: string;
   width: number;
@@ -15,7 +17,7 @@ export async function processImageWithAI(
 ): Promise<ProcessImageResult | null> {
   try {
     const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
-    const response = await fetch(`${aiServiceUrl}/process-image`, {
+    const response = await fetchWithTimeout(`${aiServiceUrl}/process-image`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

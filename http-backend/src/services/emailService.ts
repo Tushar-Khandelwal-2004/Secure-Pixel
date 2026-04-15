@@ -1,20 +1,20 @@
 import nodemailer from "nodemailer";
 
-if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-  throw new Error("SMTP credentials missing");
-}
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: Number(process.env.SMTP_PORT) || 465,
-  secure: true, 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
 export const sendOtpEmail = async (to: string, otpCode: string) => {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error("SMTP credentials missing");
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT) || 465,
+    secure: true,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
   try {
     await transporter.sendMail({
       from: `"SecurePixel Security" <${process.env.SMTP_USER}>`,

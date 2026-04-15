@@ -6,7 +6,7 @@ import os
 from typing import List
 from app.services.watermark import encode_watermark, decode_watermark
 from app.core.faiss_manager import faiss_db
-from app.core.model_loader import get_embedding
+from app.core.model_loader import get_embedding, model
 
 router = APIRouter()
 
@@ -25,6 +25,14 @@ class FaissAddRequest(BaseModel):
 class FaissSearchRequest(BaseModel):
     embedding: List[float]
 
+@router.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "faiss_vectors": faiss_db.index.ntotal
+    }
+
 @router.post("/process-image")
 def process_image(req: ImageRequest):
     if not os.path.exists(req.image_path):
@@ -36,7 +44,8 @@ def process_image(req: ImageRequest):
         calculated_phash = str(imagehash.phash(img))
         embedding_list = get_embedding(img)
             
-        payload = f"SPXL:{req.image_id}"
+        short_id = req.image_id.replace("-", "")[:8]
+        payload = f"SPXL:{short_id}"
         dir_name = os.path.dirname(req.image_path)
         secured_filename = f"{req.image_id}-secured.png"
         secured_image_path = os.path.join(dir_name, secured_filename)
@@ -91,7 +100,7 @@ def extract_features(req: ImageRequest):
 
 @router.post("/extract-watermark")
 def extract_watermark(req: dict):
-    payload = decode_watermark(req.get("image_path"), 41)
+    payload = decode_watermark(req.get("image_path"), 13)
     return {"payload": payload}
 
 @router.post("/faiss/sync")

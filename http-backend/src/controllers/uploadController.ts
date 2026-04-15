@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
+import fs from "fs";
 import path from "path";
 import prisma from "../lib/prisma";
 import { processImageWithAI } from "../services/aiClient";
 import { AuthRequest } from "../types/AuthRequest";
+import { fetchWithTimeout } from "../services/fetchWithTimeout";
+
 export const uploadImage = async (req: AuthRequest, res: Response): Promise<any> => {
   const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
   const owner_id = req.user?.userId;
@@ -20,44 +23,43 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
   const normalizedPath = absolutePath.replace(/\\/g, "/");
 
   try {
+    const aiResult = await processImageWithAI(normalizedPath, image_id, owner_id);
+
+    if (!aiResult) {
+      if (fs.existsSync(normalizedPath)) fs.unlinkSync(normalizedPath);
+      return res.status(503).json({
+        error: "AI processing service is unavailable. Please try again later."
+      });
+    }
+
     await prisma.image.create({
       data: {
         image_id,
         owner_id,
         file_path: normalizedPath,
+        phash: aiResult.phash,
+        embedding: aiResult.embedding,
+        secured_file_path: aiResult.secured_file_path,
       },
     });
 
-    const aiResult = await processImageWithAI(normalizedPath, image_id, owner_id);
-
-    if (aiResult) {
-      await prisma.image.update({
-        where: { image_id },
-        data: {
-          phash: aiResult.phash,
-          embedding: aiResult.embedding,
-          secured_file_path: aiResult.secured_file_path,
-        },
+    try {
+      await fetchWithTimeout(`${aiServiceUrl}/faiss/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_id,
+          embedding: aiResult.embedding
+        })
       });
-
-      try {
-        await fetch(`${aiServiceUrl}/faiss/add`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_id: image_id,
-            embedding: aiResult.embedding
-          })
-        });
-      } catch (faissError) {
-        console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
-      }
+    } catch (faissError) {
+      console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
     }
 
     const originalUrl = `/uploads/${req.file.filename}`;
-    const securedUrl = aiResult?.secured_filename ? `/uploads/${aiResult.secured_filename}` : null;
+    const securedUrl = aiResult.secured_filename ? `/uploads/${aiResult.secured_filename}` : null;
 
-    res.json({
+    return res.json({
       message: "Image uploaded, processed & secured successfully",
       image_id,
       urls: {
@@ -65,13 +67,14 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
         secured: securedUrl,
       },
       ai_metrics: {
-        phash: aiResult?.phash,
-        dimensions: `${aiResult?.width}x${aiResult?.height}`,
+        phash: aiResult.phash,
+        dimensions: `${aiResult.width}x${aiResult.height}`,
       },
     });
   } catch (error) {
-    console.error("Database error:", error);
-    res.status(500).json({ error: "Failed to save image metadata" });
+    console.error("Upload error:", error);
+    if (fs.existsSync(normalizedPath)) fs.unlinkSync(normalizedPath);
+    return res.status(500).json({ error: "Failed to process and save image." });
   }
 };
 
@@ -83,12 +86,109 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const cursor = req.query.cursor as string | undefined;
+
     const images = await prisma.image.findMany({
-      where: { owner_id }
+      where: { owner_id },
+      select: {
+        image_id: true,
+        upload_time: true,
+        phash: true,
+        file_path: true,
+        secured_file_path: true,
+      },
+      orderBy: { upload_time: "desc" },
+      take: limit + 1,
+      ...(cursor && {
+        cursor: { image_id: cursor },
+        skip: 1,
+      }),
     });
 
-    res.json(images);
+    const hasNextPage = images.length > limit;
+    const pageItems = hasNextPage ? images.slice(0, limit) : images;
+    const nextCursor = hasNextPage ? pageItems[pageItems.length - 1].image_id : null;
+
+    const safeImages = pageItems.map((img) => {
+      const filename = img.file_path.split("/").pop();
+      const securedFilename = img.secured_file_path?.split("/").pop();
+
+      return {
+        image_id: img.image_id,
+        upload_time: img.upload_time,
+        phash: img.phash,
+        urls: {
+          original: filename ? `/uploads/${filename}` : null,
+          secured: securedFilename ? `/uploads/${securedFilename}` : null,
+        }
+      };
+    });
+
+    return res.json({
+      data: safeImages,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor,
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch images" });
+    return res.status(500).json({ error: "Failed to fetch images" });
+  }
+};
+
+export const deleteImage = async (req: AuthRequest, res: Response): Promise<any> => {
+  try {
+    const owner_id = req.user?.userId;
+    const rawId = req.params.id;
+    const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
+    const id = Array.isArray(rawId) ? rawId[0] : rawId;
+
+    if (!owner_id) return res.status(401).json({ error: "Unauthorized" });
+    if (!id) return res.status(400).json({ error: "Image ID is required" });
+
+    const image = await prisma.image.findUnique({
+      where: { image_id: id }
+    });
+
+    if (!image) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+
+    if (image.owner_id !== owner_id) {
+      return res.status(403).json({ error: "You do not have permission to delete this image" });
+    }
+
+    await prisma.image.delete({
+      where: { image_id: id }
+    });
+
+    const filesToDelete = [image.file_path, image.secured_file_path].filter(Boolean) as string[];
+    for (const filePath of filesToDelete) {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    try {
+      const remainingImages = await prisma.image.findMany({
+        where: { embedding: { isEmpty: false } },
+        select: { image_id: true, embedding: true }
+      });
+
+      await fetchWithTimeout(`${aiServiceUrl}/faiss/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: remainingImages })
+      });
+    } catch (faissError) {
+      console.error("Warning: FAISS re-sync after delete failed.", faissError);
+    }
+
+    return res.status(200).json({ message: "Image deleted successfully", image_id: id });
+  } catch (error) {
+    console.error("Delete error:", error);
+    return res.status(500).json({ error: "Failed to delete image" });
   }
 };
