@@ -19,7 +19,7 @@ def encode_watermark(image_path: str, secret_data: str, output_path: str):
     except Exception as e:
         print(f"ENCODE FAILED: {str(e)}")
 
-def decode_watermark(image_path: str, payload_length: int = 41) -> str:
+def decode_watermark(image_path: str, payload_length: int = 13) -> str:
     try:
         bgr = cv2.imread(image_path)
         if bgr is None:

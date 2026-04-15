@@ -47,3 +47,22 @@ export const signinSchema = z.object({
     password: z.string().min(1, "Password is required") // We just check if it's empty here
   })
 });
+
+export const updateProfileSchema = z.object({
+  body: z.object({
+    profile_photo: z.string().url("Profile photo must be a valid URL").optional().nullable().or(z.literal("")),
+    x_handle: z.string()
+      .regex(/^@[A-Za-z0-9_]{1,15}$/, "Invalid X handle format. Must start with @")
+      .optional()
+      .nullable()
+      .or(z.literal("")),
+    insta_handle: z.string()
+      .regex(/^[A-Za-z0-9_.]+$/, "Invalid Instagram handle format")
+      .optional()
+      .nullable()
+      .or(z.literal(""))
+  }).refine(
+    (body) => Object.keys(body).some((key) => body[key as keyof typeof body] !== undefined),
+    "At least one profile field is required"
+  )
+});

@@ -4,6 +4,7 @@ import prisma from "../lib/prisma";
 import { sendOtpEmail } from "../services/emailService";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { AuthRequest } from "../types/AuthRequest";
 
 const hashToken = (token: string): string => {
     return crypto.createHash("sha256").update(token).digest("hex");
@@ -72,7 +73,6 @@ export const signup = async (req: Request, res: Response): Promise<any> => {
         });
 
         await sendOtpEmail(email, otpCode);
-        console.log(`[EMAIL MOCK] Sending OTP ${otpCode} to ${email}`);
 
         // 6. Respond to the frontend
         res.status(201).json({
@@ -361,5 +361,56 @@ export const signout = async (req: Request, res: Response): Promise<any> => {
         console.error("Signout error:", error);
         res.clearCookie("refreshToken");
         res.status(200).json({ message: "Signed out completely" });
+    }
+};
+
+const normalizeOptionalProfileField = (value: unknown): string | null | undefined => {
+    if (value === undefined) return undefined;
+    if (value === null || value === "") return null;
+    return String(value);
+};
+
+export const updateProfile = async (req: AuthRequest, res: Response): Promise<any> => {
+    try {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        const { profile_photo, x_handle, insta_handle } = req.body;
+        const data = {
+            ...(profile_photo !== undefined && {
+                profile_photo: normalizeOptionalProfileField(profile_photo)
+            }),
+            ...(x_handle !== undefined && {
+                x_handle: normalizeOptionalProfileField(x_handle)
+            }),
+            ...(insta_handle !== undefined && {
+                insta_handle: normalizeOptionalProfileField(insta_handle)
+            }),
+        };
+
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data,
+            select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                profile_photo: true,
+                x_handle: true,
+                insta_handle: true,
+            }
+        });
+
+        return res.status(200).json({
+            message: "Profile updated successfully",
+            user: updatedUser
+        });
+    } catch (error) {
+        console.error("Profile update error:", error);
+        return res.status(500).json({ error: "Internal server error while updating profile" });
     }
 };

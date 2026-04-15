@@ -7,6 +7,7 @@ import imageRoutes from "./routes/imageRoutes";
 import authRoutes from "./routes/authRoutes";
 import cookieParser from "cookie-parser";
 import { globalApiLimiter, redisClient } from "./middlewares/rateLimiter";
+import { startExpiredUserCleanup } from "./services/expiredUserCleanup";
 
 const app = express();
 const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
@@ -115,5 +116,6 @@ async function syncFAISS() {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
+    startExpiredUserCleanup();
     await syncFAISS(); // Sync right after the server starts
 });

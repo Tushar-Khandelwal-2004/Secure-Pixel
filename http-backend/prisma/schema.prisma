@@ -43,7 +43,6 @@ model Image {
   upload_time       DateTime @default(now())
   phash             String?
   embedding         Float[]
-  createdAt         DateTime @default(now())
 }
 
 model RefreshToken {

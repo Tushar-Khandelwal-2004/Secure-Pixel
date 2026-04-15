@@ -4,6 +4,7 @@ import path from "path";
 import prisma from "../lib/prisma";
 import { processImageWithAI } from "../services/aiClient";
 import { AuthRequest } from "../types/AuthRequest";
+import { fetchWithTimeout } from "../services/fetchWithTimeout";
 
 export const uploadImage = async (req: AuthRequest, res: Response): Promise<any> => {
   const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
@@ -31,21 +32,19 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
       });
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.image.create({
-        data: {
-          image_id,
-          owner_id,
-          file_path: normalizedPath,
-          phash: aiResult.phash,
-          embedding: aiResult.embedding,
-          secured_file_path: aiResult.secured_file_path,
-        },
-      });
+    await prisma.image.create({
+      data: {
+        image_id,
+        owner_id,
+        file_path: normalizedPath,
+        phash: aiResult.phash,
+        embedding: aiResult.embedding,
+        secured_file_path: aiResult.secured_file_path,
+      },
     });
 
     try {
-      await fetch(`${aiServiceUrl}/faiss/add`, {
+      await fetchWithTimeout(`${aiServiceUrl}/faiss/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -178,7 +177,7 @@ export const deleteImage = async (req: AuthRequest, res: Response): Promise<any>
         select: { image_id: true, embedding: true }
       });
 
-      await fetch(`${aiServiceUrl}/faiss/sync`, {
+      await fetchWithTimeout(`${aiServiceUrl}/faiss/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: remainingImages })
