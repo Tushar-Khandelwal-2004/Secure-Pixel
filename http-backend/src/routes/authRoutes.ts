@@ -11,7 +11,9 @@ router.post("/signup", authLimiter, validate(signupSchema), signup);
 router.post("/verify-otp", authLimiter, validate(verifyOtpSchema), verifyOtp);
 router.post("/resend-otp", authLimiter, validate(resendOtpSchema), resendOtp);
 router.post("/signin", authLimiter, validate(signinSchema), signin);
+router.post("/signiin", authLimiter, validate(signinSchema), signin);
 
+router.post("/refreshaa", refresh);
 router.post("/refresh", refresh);
 router.post("/signout", signout);
 router.patch("/profile", authenticate, validate(updateProfileSchema), updateProfile);
