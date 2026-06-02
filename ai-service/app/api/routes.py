@@ -1,9 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from PIL import Image
 import imagehash
 import os
-from typing import List
+import base64
+import tempfile
+import urllib.request
+from contextlib import contextmanager
+from typing import List, Optional
 from app.services.watermark import encode_watermark, decode_watermark
 from app.core.faiss_manager import faiss_db
 from app.core.model_loader import get_embedding, model
@@ -11,9 +15,10 @@ from app.core.model_loader import get_embedding, model
 router = APIRouter()
 
 class ImageRequest(BaseModel):
-    image_path: str
-    image_id: str
-    owner_id: str
+    image_path: Optional[str] = None
+    image_url: Optional[str] = None
+    image_id: Optional[str] = None
+    owner_id: Optional[str] = None
 
 class FaissSyncRequest(BaseModel):
     items: List[dict]
@@ -25,6 +30,54 @@ class FaissAddRequest(BaseModel):
 class FaissSearchRequest(BaseModel):
     embedding: List[float]
 
+@contextmanager
+def request_image_path(
+    upload: Optional[UploadFile] = None,
+    image_path: Optional[str] = None,
+    image_url: Optional[str] = None,
+):
+    temp_path = None
+    try:
+        if upload is not None:
+            suffix = os.path.splitext(upload.filename or "")[1] or ".png"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(upload.file.read())
+                temp_path = tmp.name
+            yield temp_path
+            return
+
+        if image_url:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".img") as tmp:
+                with urllib.request.urlopen(image_url, timeout=20) as response:
+                    tmp.write(response.read())
+                temp_path = tmp.name
+            yield temp_path
+            return
+
+        if image_path:
+            if not os.path.exists(image_path):
+                raise HTTPException(status_code=404, detail="Image file not found")
+            yield image_path
+            return
+
+        raise HTTPException(status_code=400, detail="Image file, image_url, or image_path is required")
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+async def parse_image_request(
+    request: Request,
+    image: Optional[UploadFile],
+    image_id: Optional[str],
+    owner_id: Optional[str],
+) -> tuple[Optional[UploadFile], ImageRequest]:
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("application/json"):
+        payload = await request.json()
+        return None, ImageRequest(**payload)
+
+    return image, ImageRequest(image_id=image_id, owner_id=owner_id)
+
 @router.get("/health")
 def health_check():
     return {
@@ -34,73 +87,96 @@ def health_check():
     }
 
 @router.post("/process-image")
-def process_image(req: ImageRequest):
-    if not os.path.exists(req.image_path):
-        raise HTTPException(status_code=404, detail="Image file not found")
+async def process_image(
+    request: Request,
+    image: Optional[UploadFile] = File(None),
+    image_id: Optional[str] = Form(None),
+    owner_id: Optional[str] = Form(None),
+):
+    upload, req = await parse_image_request(request, image, image_id, owner_id)
+    if not req.image_id:
+        raise HTTPException(status_code=400, detail="image_id is required")
+    if not req.owner_id:
+        raise HTTPException(status_code=400, detail="owner_id is required")
 
     try:
-        img = Image.open(req.image_path).convert('RGB')
-        
-        calculated_phash = str(imagehash.phash(img))
-        embedding_list = get_embedding(img)
-            
-        short_id = req.image_id.replace("-", "")[:8]
-        payload = f"SPXL:{short_id}"
-        dir_name = os.path.dirname(req.image_path)
-        secured_filename = f"{req.image_id}-secured.png"
-        secured_image_path = os.path.join(dir_name, secured_filename)
-        
-        encode_watermark(req.image_path, payload, secured_image_path)
-        normalized_secured_path = secured_image_path.replace("\\", "/")
+        with request_image_path(upload, req.image_path, req.image_url) as source_path:
+            img = Image.open(source_path).convert("RGB")
+            calculated_phash = str(imagehash.phash(img))
+            embedding_list = get_embedding(img)
 
-        return {
-            "image_id": req.image_id,
-            "width": img.width,
-            "height": img.height,
-            "phash": calculated_phash,
-            "embedding": embedding_list,
-            "secured_file_path": normalized_secured_path,
-            "secured_filename": secured_filename
-        }
+            short_id = req.image_id.replace("-", "")[:8]
+            payload = f"SPXL:{short_id}"
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as secured_tmp:
+                secured_image_path = secured_tmp.name
+
+            try:
+                encode_watermark(source_path, payload, secured_image_path)
+                with open(secured_image_path, "rb") as secured_file:
+                    secured_base64 = base64.b64encode(secured_file.read()).decode("ascii")
+            finally:
+                if os.path.exists(secured_image_path):
+                    os.unlink(secured_image_path)
+
+            return {
+                "image_id": req.image_id,
+                "width": img.width,
+                "height": img.height,
+                "phash": calculated_phash,
+                "embedding": embedding_list,
+                "secured_image_base64": secured_base64,
+                "secured_mime_type": "image/png"
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
 @router.post("/extract-features")
-def extract_features(req: ImageRequest):
-    if not os.path.exists(req.image_path):
-        raise HTTPException(status_code=404, detail="Image file not found")
+async def extract_features(
+    request: Request,
+    image: Optional[UploadFile] = File(None),
+    image_id: Optional[str] = Form(None),
+    owner_id: Optional[str] = Form(None),
+):
+    upload, req = await parse_image_request(request, image, image_id, owner_id)
 
     try:
-        img = Image.open(req.image_path).convert('RGB')
-        
-        # Generate the 8 spatial variations
-        variations = [
-            img,
-            img.rotate(90, expand=True),
-            img.rotate(180, expand=True),
-            img.rotate(270, expand=True),
-            img.transpose(Image.FLIP_LEFT_RIGHT),
-            img.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True),
-            img.transpose(Image.FLIP_LEFT_RIGHT).rotate(180, expand=True),
-            img.transpose(Image.FLIP_LEFT_RIGHT).rotate(270, expand=True)
-        ]
-        
-        # Calculate pHash for all 8 variations
-        phash_list = [str(imagehash.phash(v)) for v in variations]
-        
-        # We only need the embedding of the original image for Layer 3
-        embedding_list = get_embedding(img)
-            
-        return {
-            "phash_variations": phash_list,
-            "embedding": embedding_list
-        }
+        with request_image_path(upload, req.image_path, req.image_url) as source_path:
+            img = Image.open(source_path).convert("RGB")
+
+            variations = [
+                img,
+                img.rotate(90, expand=True),
+                img.rotate(180, expand=True),
+                img.rotate(270, expand=True),
+                img.transpose(Image.FLIP_LEFT_RIGHT),
+                img.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True),
+                img.transpose(Image.FLIP_LEFT_RIGHT).rotate(180, expand=True),
+                img.transpose(Image.FLIP_LEFT_RIGHT).rotate(270, expand=True)
+            ]
+
+            phash_list = [str(imagehash.phash(v)) for v in variations]
+            embedding_list = get_embedding(img)
+
+            return {
+                "phash_variations": phash_list,
+                "embedding": embedding_list
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error extracting features: {str(e)}")
 
 @router.post("/extract-watermark")
-def extract_watermark(req: dict):
-    payload = decode_watermark(req.get("image_path"), 13)
+async def extract_watermark(
+    request: Request,
+    image: Optional[UploadFile] = File(None),
+):
+    upload, req = await parse_image_request(request, image, None, None)
+    with request_image_path(upload, req.image_path, req.image_url) as source_path:
+        payload = decode_watermark(source_path, 13)
     return {"payload": payload}
 
 @router.post("/faiss/sync")

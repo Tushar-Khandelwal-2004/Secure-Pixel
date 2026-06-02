@@ -1,10 +1,9 @@
 import { Response } from "express";
-import path from "path";
-import fs from "fs";
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../types/AuthRequest";
 import { fetchWithTimeout } from "../services/fetchWithTimeout";
+import { queryImageVector, VectorMatch } from "../services/vectorService";
 
 interface WatermarkResponse {
   payload?: string;
@@ -15,17 +14,29 @@ interface FeatureResponse {
   embedding: number[];
 }
 
-interface FaissMatch {
-  image_id: string;
-  score: number;
-}
-
-interface FaissSearchResponse {
-  matches: FaissMatch[];
-}
-
 const HEX_PHASH_REGEX = /^[0-9a-f]{16}$/i;
 const SHORT_WATERMARK_ID_REGEX = /^[0-9a-f]{8}$/i;
+
+const getAiHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {};
+  if (process.env.AI_SERVICE_API_KEY) {
+    headers["X-AI-Service-Key"] = process.env.AI_SERVICE_API_KEY;
+  }
+  return headers;
+};
+
+const toBlobPart = (buffer: Buffer): Uint8Array<ArrayBuffer> => {
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) as Uint8Array<ArrayBuffer>;
+};
+
+const buildImageForm = (file: Express.Multer.File, fields: Record<string, string> = {}): FormData => {
+  const form = new FormData();
+  form.append("image", new Blob([toBlobPart(file.buffer)], { type: file.mimetype }), file.originalname);
+  for (const [key, value] of Object.entries(fields)) {
+    form.append(key, value);
+  }
+  return form;
+};
 
 const getOwnerDetails = async (imageId: string) => {
   const originalImage = await prisma.image.findUnique({
@@ -66,24 +77,14 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
   const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
   if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
-  const absolutePath = path.resolve(req.file.path).replace(/\\/g, "/");
-  let fileDeleted = false;
-
-  const cleanupFile = () => {
-    if (!fileDeleted && fs.existsSync(absolutePath)) {
-      fs.unlinkSync(absolutePath);
-      fileDeleted = true;
-    }
-  };
-
   try {
     // ==========================================
     // LAYER 1: Watermark Extraction (O(1) Absolute Match)
     // ==========================================
     const wmResponse = await fetchWithTimeout(`${aiServiceUrl}/extract-watermark`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image_path: absolutePath })
+      headers: getAiHeaders(),
+      body: buildImageForm(req.file)
     });
     const { payload } = (await wmResponse.json()) as WatermarkResponse;
 
@@ -114,8 +115,8 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     // ==========================================
     const featResponse = await fetchWithTimeout(`${aiServiceUrl}/extract-features`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image_path: absolutePath, image_id: "temp", owner_id: "temp" })
+      headers: getAiHeaders(),
+      body: buildImageForm(req.file, { image_id: "temp", owner_id: "temp" })
     });
 
     const { phash_variations, embedding } = (await featResponse.json()) as FeatureResponse;
@@ -160,14 +161,9 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
     }
 
     // ==========================================
-    // LAYER 3: AI Vector Similarity (FAISS)
+    // LAYER 3: AI Vector Similarity (Upstash Vector)
     // ==========================================
-    const faissResponse = await fetchWithTimeout(`${aiServiceUrl}/faiss/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ embedding })
-    });
-    const { matches } = (await faissResponse.json()) as FaissSearchResponse;
+    const matches: VectorMatch[] = await queryImageVector(embedding);
 
     // Check if the top FAISS match is above our 0.90 threshold
     if (matches.length > 0) {
@@ -179,7 +175,7 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
         return res.status(409).json({
           message: "Duplicate Detected (Layer 3)",
           confidence: "High",
-          method: "AI CLIP Embedding (FAISS)",
+          method: "AI CLIP Embedding (Vector Search)",
           match_type: "Identical or lightly compressed",
           matched_image_id: matchedId,
           original_creator: ownerInfo,
@@ -189,7 +185,7 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
         return res.status(409).json({
           message: "Suspected Derivative Detected (Layer 3)",
           confidence: "Medium",
-          method: "AI CLIP Embedding (FAISS)",
+          method: "AI CLIP Embedding (Vector Search)",
           match_type: "Heavily edited, cropped, or filtered",
           matched_image_id: matchedId,
           original_creator: ownerInfo,
@@ -206,7 +202,5 @@ export const detectImage = async (req: AuthRequest, res: Response): Promise<any>
   } catch (error) {
     console.error("Detection error:", error);
     res.status(500).json({ error: "Detection pipeline failed" });
-  } finally {
-    cleanupFile();
   }
 };

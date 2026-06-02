@@ -38,8 +38,12 @@ model Image {
   owner_id          String
   owner             User     @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   
-  file_path         String
+  file_path         String?
+  original_url      String?
+  original_public_id String?
   secured_file_path String?
+  secured_url       String?
+  secured_public_id String?
   upload_time       DateTime @default(now())
   phash             String?
   embedding         Float[]

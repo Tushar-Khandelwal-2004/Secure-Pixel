@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
-import fs from "fs";
 import path from "path";
+import { v4 as uuidv4 } from "uuid";
 import prisma from "../lib/prisma";
 import { processImageWithAI } from "../services/aiClient";
 import { AuthRequest } from "../types/AuthRequest";
-import { fetchWithTimeout } from "../services/fetchWithTimeout";
+import { deleteCloudinaryAsset, uploadImageBufferToCloudinary } from "../services/cloudinaryService";
+import { deleteImageVector, upsertImageVector } from "../services/vectorService";
 
 export const uploadImage = async (req: AuthRequest, res: Response): Promise<any> => {
-  const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
   const owner_id = req.user?.userId;
 
   if (!owner_id) {
@@ -18,53 +18,71 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
     return res.status(400).json({ error: "No image uploaded" });
   }
 
-  const image_id = path.parse(req.file.filename).name;
-  const absolutePath = path.resolve(req.file.path);
-  const normalizedPath = absolutePath.replace(/\\/g, "/");
+  const image_id = uuidv4();
+  const ext = path.extname(req.file.originalname).toLowerCase() || ".png";
+  const contentType = req.file.mimetype || "image/png";
+  const folderBase = process.env.CLOUDINARY_FOLDER || "securepixel";
+  const uploadedPublicIds: string[] = [];
 
   try {
-    const aiResult = await processImageWithAI(normalizedPath, image_id, owner_id);
+    const aiResult = await processImageWithAI(
+      req.file.buffer,
+      req.file.originalname,
+      contentType,
+      image_id,
+      owner_id
+    );
 
     if (!aiResult) {
-      if (fs.existsSync(normalizedPath)) fs.unlinkSync(normalizedPath);
       return res.status(503).json({
         error: "AI processing service is unavailable. Please try again later."
       });
     }
 
+    const originalUpload = await uploadImageBufferToCloudinary(req.file.buffer, {
+      publicId: image_id,
+      folder: `${folderBase}/originals`,
+      filename: `${image_id}${ext}`,
+      contentType,
+    });
+    uploadedPublicIds.push(originalUpload.public_id);
+
+    const securedBuffer = Buffer.from(aiResult.secured_image_base64, "base64");
+    const securedUpload = await uploadImageBufferToCloudinary(securedBuffer, {
+      publicId: `${image_id}-secured`,
+      folder: `${folderBase}/secured`,
+      filename: `${image_id}-secured.png`,
+      contentType: aiResult.secured_mime_type || "image/png",
+    });
+    uploadedPublicIds.push(securedUpload.public_id);
+
     await prisma.image.create({
       data: {
         image_id,
         owner_id,
-        file_path: normalizedPath,
+        file_path: originalUpload.secure_url,
+        original_url: originalUpload.secure_url,
+        original_public_id: originalUpload.public_id,
         phash: aiResult.phash,
         embedding: aiResult.embedding,
-        secured_file_path: aiResult.secured_file_path,
+        secured_file_path: securedUpload.secure_url,
+        secured_url: securedUpload.secure_url,
+        secured_public_id: securedUpload.public_id,
       },
     });
 
     try {
-      await fetchWithTimeout(`${aiServiceUrl}/faiss/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image_id,
-          embedding: aiResult.embedding
-        })
-      });
-    } catch (faissError) {
-      console.error("Warning: Failed to sync new vector to FAISS index.", faissError);
+      await upsertImageVector(image_id, aiResult.embedding);
+    } catch (vectorError) {
+      console.error("Warning: Failed to sync new vector to Upstash Vector.", vectorError);
     }
-
-    const originalUrl = `/uploads/${req.file.filename}`;
-    const securedUrl = aiResult.secured_filename ? `/uploads/${aiResult.secured_filename}` : null;
 
     return res.json({
       message: "Image uploaded, processed & secured successfully",
       image_id,
       urls: {
-        original: originalUrl,
-        secured: securedUrl,
+        original: originalUpload.secure_url,
+        secured: securedUpload.secure_url,
       },
       ai_metrics: {
         phash: aiResult.phash,
@@ -73,7 +91,13 @@ export const uploadImage = async (req: AuthRequest, res: Response): Promise<any>
     });
   } catch (error) {
     console.error("Upload error:", error);
-    if (fs.existsSync(normalizedPath)) fs.unlinkSync(normalizedPath);
+    for (const publicId of uploadedPublicIds) {
+      try {
+        await deleteCloudinaryAsset(publicId);
+      } catch (cleanupError) {
+        console.error(`Warning: Failed to clean up Cloudinary asset ${publicId}.`, cleanupError);
+      }
+    }
     return res.status(500).json({ error: "Failed to process and save image." });
   }
 };
@@ -97,6 +121,8 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
         phash: true,
         file_path: true,
         secured_file_path: true,
+        original_url: true,
+        secured_url: true,
       },
       orderBy: { upload_time: "desc" },
       take: limit + 1,
@@ -111,16 +137,13 @@ export const getImages = async (req: AuthRequest, res: Response): Promise<any> =
     const nextCursor = hasNextPage ? pageItems[pageItems.length - 1].image_id : null;
 
     const safeImages = pageItems.map((img) => {
-      const filename = img.file_path.split("/").pop();
-      const securedFilename = img.secured_file_path?.split("/").pop();
-
       return {
         image_id: img.image_id,
         upload_time: img.upload_time,
         phash: img.phash,
         urls: {
-          original: filename ? `/uploads/${filename}` : null,
-          secured: securedFilename ? `/uploads/${securedFilename}` : null,
+          original: img.original_url || img.file_path || null,
+          secured: img.secured_url || img.secured_file_path || null,
         }
       };
     });
@@ -142,7 +165,6 @@ export const deleteImage = async (req: AuthRequest, res: Response): Promise<any>
   try {
     const owner_id = req.user?.userId;
     const rawId = req.params.id;
-    const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
     const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
     if (!owner_id) return res.status(401).json({ error: "Unauthorized" });
@@ -164,26 +186,19 @@ export const deleteImage = async (req: AuthRequest, res: Response): Promise<any>
       where: { image_id: id }
     });
 
-    const filesToDelete = [image.file_path, image.secured_file_path].filter(Boolean) as string[];
-    for (const filePath of filesToDelete) {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+    const assetsToDelete = [image.original_public_id, image.secured_public_id].filter(Boolean) as string[];
+    for (const publicId of assetsToDelete) {
+      try {
+        await deleteCloudinaryAsset(publicId);
+      } catch (cloudinaryError) {
+        console.error(`Warning: Failed to delete Cloudinary asset ${publicId}.`, cloudinaryError);
       }
     }
 
     try {
-      const remainingImages = await prisma.image.findMany({
-        where: { embedding: { isEmpty: false } },
-        select: { image_id: true, embedding: true }
-      });
-
-      await fetchWithTimeout(`${aiServiceUrl}/faiss/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: remainingImages })
-      });
-    } catch (faissError) {
-      console.error("Warning: FAISS re-sync after delete failed.", faissError);
+      await deleteImageVector(id);
+    } catch (vectorError) {
+      console.error("Warning: Vector delete after image delete failed.", vectorError);
     }
 
     return res.status(200).json({ message: "Image deleted successfully", image_id: id });
