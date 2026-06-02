@@ -3,7 +3,7 @@ services:
     name: securepixel-http-backend
     runtime: docker
     plan: free
-    branch: deployement
+    branch: main
     dockerContext: ./http-backend
     dockerfilePath: ./http-backend/Dockerfile
     healthCheckPath: /healthz
