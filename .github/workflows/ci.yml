@@ -4,11 +4,9 @@ on:
   pull_request:
     branches:
       - main
-      - deployement
   push:
     branches:
       - main
-      - deployement
 
 jobs:
   http-backend:
