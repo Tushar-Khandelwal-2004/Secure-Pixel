@@ -30,10 +30,14 @@ jobs:
 
       - name: Generate Prisma client
         working-directory: http-backend
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
         run: npx prisma generate --schema=./prisma/schema.prisma
 
       - name: Build TypeScript
         working-directory: http-backend
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
         run: npm run build
 
   ai-service:
