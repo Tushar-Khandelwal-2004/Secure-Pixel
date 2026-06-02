@@ -64,5 +64,7 @@ coverage/
 ai-service/test_*.py
 http-backend/test_*.ts
 e2e-test-image.png
+BACKEND_INTEGRATION_GUIDE.md
+BEGINNER_BACKEND_DEPLOYMENT_GUIDE.md
 venv/
 __pycache__/
