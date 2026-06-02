@@ -1,0 +1,70 @@
+name: Deploy AI Service to Hugging Face
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "ai-service/**"
+      - ".github/workflows/deploy-ai-service.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out SecurePixel
+        uses: actions/checkout@v4
+
+      - name: Check out Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+        run: |
+          git clone "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/beluga-69/securepixel-ai-service" hf-space
+
+      - name: Sync AI service files
+        run: |
+          rsync -a --delete \
+            --exclude ".git" \
+            --exclude "venv" \
+            --exclude "__pycache__" \
+            --exclude "*.pyc" \
+            --exclude "test_*.py" \
+            ai-service/ hf-space/
+
+          cat > hf-space/README.md <<'EOF'
+          ---
+          title: SecurePixel AI Service
+          sdk: docker
+          app_port: 8000
+          ---
+
+          # SecurePixel AI Service
+
+          FastAPI service for SecurePixel image watermarking, feature extraction, and CLIP embeddings.
+          EOF
+
+          cat > hf-space/.gitignore <<'EOF'
+          __pycache__/
+          *.pyc
+          *.pyo
+          *.pyd
+          .env
+          .env.*
+          venv/
+          EOF
+
+      - name: Commit and push Space changes
+        working-directory: hf-space
+        run: |
+          git config user.name "securepixel-deploy-bot"
+          git config user.email "securepixel-deploy-bot@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No AI service changes to deploy."
+            exit 0
+          fi
+          git commit -m "Deploy AI service from SecurePixel"
+          git push

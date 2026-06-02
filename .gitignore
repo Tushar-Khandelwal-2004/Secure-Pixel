@@ -6,6 +6,7 @@ dist/
 build/
 .env
 .env.*
+!.env.example
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -32,6 +33,7 @@ __pycache__/
 # Python env files
 .env
 .env.*
+!.env.example
 
 # ================================
 # OS / Editor files
@@ -61,5 +63,8 @@ coverage/
 
 ai-service/test_*.py
 http-backend/test_*.ts
+e2e-test-image.png
+BACKEND_INTEGRATION_GUIDE.md
+BEGINNER_BACKEND_DEPLOYMENT_GUIDE.md
 venv/
 __pycache__/

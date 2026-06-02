@@ -19,7 +19,7 @@ app.use(cors({
         ? process.env.ALLOWED_ORIGINS.split(",")
         : ["http://localhost:3000", "http://localhost:5173"],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
@@ -70,7 +70,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 const uploadDir = path.join(process.cwd(), "uploads");
-app.use("/images", express.static(uploadDir));
 
 app.get("/healthz", async (_req, res) => {
     try {
@@ -90,32 +89,11 @@ app.get("/healthz", async (_req, res) => {
 });
 app.use("/", imageRoutes);
 app.use("/auth", authRoutes);
+app.use("/images", express.static(uploadDir));
 
-
-async function syncFAISS() {
-    console.log("Syncing database with AI Vector Search...");
-    try {
-        const allImages = await prisma.image.findMany({
-            where: { embedding: { isEmpty: false } },
-            select: { image_id: true, embedding: true }
-        });
-
-        if (allImages.length > 0) {
-            await fetch(`${aiServiceUrl}/faiss/sync`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ items: allImages })
-            });
-            console.log(`Successfully synced ${allImages.length} vectors to FAISS.`);
-        }
-    } catch (error) {
-        console.error("Warning: Failed to sync FAISS on startup.", error);
-    }
-}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     startExpiredUserCleanup();
-    await syncFAISS(); // Sync right after the server starts
 });

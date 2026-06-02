@@ -37,6 +37,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
       FAISS_INDEX_PATH: ${FAISS_INDEX_PATH:-/data/faiss.index}
       FAISS_ID_MAP_PATH: ${FAISS_ID_MAP_PATH:-/data/faiss_id_map.json}
       HF_HOME: ${HF_HOME:-/home/appuser/.cache/huggingface}
@@ -69,7 +70,14 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8000}
+      AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-securepixel}
+      UPSTASH_VECTOR_REST_URL: ${UPSTASH_VECTOR_REST_URL}
+      UPSTASH_VECTOR_REST_TOKEN: ${UPSTASH_VECTOR_REST_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy
