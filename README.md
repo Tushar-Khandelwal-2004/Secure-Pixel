@@ -682,6 +682,126 @@ All API routes are served by `http-backend`. When using the bundled Nginx config
 | `GET` | `/images` | Bearer token | List authenticated user's images |
 | `DELETE` | `/images/:id` | Bearer token | Delete an owned image and best-effort derived state |
 
+<!-- BENCHMARKS:START -->
+## Benchmarks
+
+SecurePixel includes a reproducible benchmark suite for measuring the detection pipeline against common image tampering attacks and classical baseline systems.
+
+### Latest benchmark run
+
+- Completed at: `2026-06-10T14:19:56Z`
+- Images processed: `30`
+- Attack variants per image: `31`
+
+### Methodology
+
+The benchmark reads original images from `benchmark-images/`, uploads each original through `/upload`, generates tampered variants, runs those variants through `/detect`, and compares SecurePixel against ImageHash, SSIM, and OpenCV template matching baselines.
+
+Attack coverage includes crop, resize, JPEG compression, brightness, contrast, saturation, format conversion, horizontal and vertical flips, gaussian noise, screenshot simulation, OpenCV inpainting as a generative-fill proxy, bicubic upscaling, and combination attacks.
+
+SecurePixel is measured through the actual REST API. Each record includes detection status, layer, confidence or similarity score, latency, attack type, and severity. Baselines are measured locally against the same generated tampered images.
+
+- ImageHash threshold: Hamming distance <= `10`
+- SSIM threshold: score >= `0.55`
+- OpenCV template threshold: score >= `0.55`
+
+Raw reusable output is written to `benchmarks/results/raw_results.json`. Machine-readable summary output is written to `benchmarks/results/summary.json`.
+
+### Detection rate by attack type
+
+| Attack type | SecurePixel | ImageHash | SSIM | OpenCV template | Samples |
+|---|---:|---:|---:|---:|---:|
+| ai_upscale_simulation | 100.0% | 100.0% | 100.0% | 100.0% | 60 |
+| brightness | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| combined_attack | 96.7% | 48.9% | 42.2% | 28.9% | 90 |
+| contrast | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| crop | 68.9% | 15.6% | 11.1% | 54.4% | 90 |
+| flip | 100.0% | 3.3% | 6.7% | 5.0% | 60 |
+| format_conversion | 100.0% | 100.0% | 100.0% | 100.0% | 60 |
+| gaussian_noise | 97.8% | 100.0% | 100.0% | 100.0% | 90 |
+| generative_fill_simulation | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| jpeg_compression | 97.5% | 100.0% | 100.0% | 100.0% | 120 |
+| resize | 100.0% | 100.0% | 100.0% | 50.0% | 90 |
+| saturation | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| screenshot_simulation | 96.7% | 100.0% | 100.0% | 100.0% | 30 |
+
+### Leaderboard
+
+| Rank | System | Detection rate |
+|---:|---|---:|
+| 1 | securepixel | 95.6% |
+| 2 | imagehash | 80.7% |
+| 3 | ssim | 79.8% |
+| 4 | opencv_template | 77.7% |
+
+### SecurePixel layer contribution
+
+| Layer | Detected samples |
+|---|---:|
+| embedding_similarity | 90 |
+| perceptual_hash | 589 |
+| watermark | 210 |
+
+### Graphs
+
+![SecurePixel detection rate by attack type](benchmarks/results/graphs/securepixel_detection_rate_by_attack.png)
+
+![SecurePixel vs baselines](benchmarks/results/graphs/head_to_head_detection_rate.png)
+
+![SecurePixel layer contribution](benchmarks/results/graphs/securepixel_layer_contribution.png)
+
+![SecurePixel confidence distribution](benchmarks/results/graphs/securepixel_confidence_distribution.png)
+
+![Detection rate vs severity](benchmarks/results/graphs/detection_rate_vs_severity.png)
+
+![Generative fill detection rate](benchmarks/results/graphs/generative_fill_detection_rate.png)
+
+![Combined vs single attack detection rate](benchmarks/results/graphs/combined_vs_single_attack_detection_rate.png)
+
+### Interpretation
+
+SecurePixel led this benchmark run with an overall detection rate of 95.6%. SecurePixel performed best on `ai_upscale_simulation` at 100.0% and struggled most on `crop` at 68.9%. The dominant SecurePixel layer was `perceptual_hash`, which shows which part of the layered pipeline carried most detections in this run. Generative fill simulation averaged 98.3%, which should be treated as a hard case because it changes image content rather than only metadata, encoding, color, or scale. Combined attacks detected at 96.7% compared with 95.5% for single attacks, showing how detection degrades when edits are stacked.
+
+### Running the benchmark
+
+Install Python benchmark dependencies:
+
+```bash
+pip install -r benchmarks/requirements.txt
+```
+
+Run the full suite:
+
+```bash
+BENCHMARK_API_URL=http://127.0.0.1:3000 \
+BENCHMARK_EMAIL=<verified-user-email> \
+BENCHMARK_PASSWORD=<verified-user-password> \
+npm run benchmark
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:BENCHMARK_API_URL="http://127.0.0.1:3000"
+$env:BENCHMARK_EMAIL="<verified-user-email>"
+$env:BENCHMARK_PASSWORD="<verified-user-password>"
+npm run benchmark
+```
+
+Optional controls:
+
+```bash
+npm run benchmark -- --limit 10
+npm run benchmark -- --skip-securepixel
+npm run benchmark -- --access-token <jwt-access-token>
+npm run benchmark -- --delay-seconds 9.1
+```
+
+The default delay of `9.1` seconds keeps SecurePixel API calls below 400 requests per hour.
+<!-- BENCHMARKS:END -->
+
+
+
 ## Environment Variables
 
 Copy the template and fill in real values:
