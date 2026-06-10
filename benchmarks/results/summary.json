@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "suite": "SecurePixel detection benchmark",
+    "started_at": "2026-06-10T12:41:08Z",
+    "completed_at": "2026-06-10T13:06:11Z",
+    "api_url": "http://127.0.0.1:3000",
+    "images_dir": "C:\\TypeScript\\SecurePixel\\benchmark-images",
+    "image_count": 30,
+    "attack_count_per_image": 31,
+    "securepixel_skipped": false,
+    "upload_skipped": false,
+    "thresholds": {
+      "imagehash_hamming_distance": 10,
+      "ssim": 0.55,
+      "opencv_template": 0.55
+    }
+  },
+  "by_attack_type": {
+    "ai_upscale_simulation": {
+      "count": 60,
+      "securepixel": 1.0,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "brightness": {
+      "count": 60,
+      "securepixel": 0.9833,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "combined_attack": {
+      "count": 90,
+      "securepixel": 1.0,
+      "imagehash": 0.4889,
+      "ssim": 0.4222,
+      "opencv_template": 0.2889
+    },
+    "contrast": {
+      "count": 60,
+      "securepixel": 1.0,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "crop": {
+      "count": 90,
+      "securepixel": 1.0,
+      "imagehash": 0.1556,
+      "ssim": 0.1111,
+      "opencv_template": 0.5444
+    },
+    "flip": {
+      "count": 60,
+      "securepixel": 1.0,
+      "imagehash": 0.0333,
+      "ssim": 0.0667,
+      "opencv_template": 0.05
+    },
+    "format_conversion": {
+      "count": 60,
+      "securepixel": 0.9833,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "gaussian_noise": {
+      "count": 90,
+      "securepixel": 0.9778,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "generative_fill_simulation": {
+      "count": 60,
+      "securepixel": 0.9667,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "jpeg_compression": {
+      "count": 120,
+      "securepixel": 0.975,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "resize": {
+      "count": 90,
+      "securepixel": 1.0,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 0.5
+    },
+    "saturation": {
+      "count": 60,
+      "securepixel": 0.9833,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    },
+    "screenshot_simulation": {
+      "count": 30,
+      "securepixel": 1.0,
+      "imagehash": 1.0,
+      "ssim": 1.0,
+      "opencv_template": 1.0
+    }
+  },
+  "leaderboard": {
+    "securepixel": 0.9892,
+    "imagehash": 0.8065,
+    "ssim": 0.7978,
+    "opencv_template": 0.7774
+  },
+  "securepixel_layer_counts": {
+    "unknown": 31,
+    "embedding_similarity": 90,
+    "perceptual_hash": 584,
+    "watermark": 215
+  },
+  "by_severity": {
+    "jpeg_compression": {
+      "quality_30": 1.0,
+      "quality_50": 0.9667,
+      "quality_70": 1.0,
+      "quality_90": 0.9333
+    },
+    "crop": {
+      "25_percent_center": 1.0,
+      "50_percent_center": 1.0,
+      "75_percent_center": 1.0
+    }
+  },
+  "generative_fill": {
+    "center_patch": 0.9667,
+    "corner_patch": 0.9667
+  },
+  "combined_vs_single": {
+    "single_attack": 0.9881,
+    "combined_attack": 1.0
+  }
+}
