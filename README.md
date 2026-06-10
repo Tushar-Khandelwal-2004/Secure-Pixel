@@ -692,8 +692,6 @@ SecurePixel includes a reproducible benchmark suite for measuring the detection 
 - Completed at: `2026-06-10T14:19:56Z`
 - Images processed: `30`
 - Attack variants per image: `31`
-- SecurePixel API URL: `http://127.0.0.1:3000`
-- SecurePixel skipped: `False`
 
 ### Methodology
 
