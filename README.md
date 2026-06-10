@@ -682,129 +682,70 @@ All API routes are served by `http-backend`. When using the bundled Nginx config
 | `GET` | `/images` | Bearer token | List authenticated user's images |
 | `DELETE` | `/images/:id` | Bearer token | Delete an owned image and best-effort derived state |
 
+<!-- BENCHMARKS:START -->
 ## Benchmarks
 
 SecurePixel includes a reproducible benchmark suite for measuring the detection pipeline against common image tampering attacks and classical baseline systems.
 
-The benchmark runner:
+### Latest benchmark run
 
-1. Reads original images from `benchmark-images/`.
-2. Uploads each original image through `/upload` so SecurePixel can create ownership records, watermarked secured images, pHash values, and vector records.
-3. Downloads the secured derivative when available and generates tampered variants from that protected source. If the secured derivative cannot be downloaded, it falls back to the original input image.
-4. Runs every tampered image through `/detect`.
-5. Runs the same tampered image against baseline systems:
-   - ImageHash: average hash, perceptual hash, difference hash, and wavelet hash.
-   - SSIM: structural similarity baseline.
-   - OpenCV template matching: classical computer-vision baseline.
-6. Writes raw reusable results to `benchmarks/results/raw_results.json`.
-7. Generates graph PNGs in `benchmarks/results/graphs/`.
-8. Writes machine-readable and markdown summaries to `benchmarks/results/summary.json` and `benchmarks/results/summary.md`.
-
-### Running the benchmark
-
-Install Python benchmark dependencies:
-
-```bash
-pip install -r benchmarks/requirements.txt
-```
-
-Run the full suite:
-
-```bash
-BENCHMARK_API_URL=http://127.0.0.1:3000 \
-BENCHMARK_EMAIL=securepixel.benchmark@example.com \
-BENCHMARK_PASSWORD=Password1 \
-npm run benchmark
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:BENCHMARK_API_URL="http://127.0.0.1:3000"
-$env:BENCHMARK_EMAIL="securepixel.benchmark@example.com"
-$env:BENCHMARK_PASSWORD="Password1"
-npm run benchmark
-```
-
-Useful options:
-
-```bash
-npm run benchmark -- --limit 10
-npm run benchmark -- --skip-securepixel
-npm run benchmark -- --access-token <jwt-access-token>
-```
-
-The full benchmark can generate many API calls. The current backend applies a heavy-compute limiter of 30 image-processing requests per user per hour, so production-grade benchmark runs should use a controlled local environment with benchmark-safe rate-limit settings.
-
-### Attack coverage
-
-The suite generates:
-
-- Crop attacks at 25%, 50%, and 75% of original dimensions.
-- Resize attacks at 25%, 50%, and 200%.
-- JPEG compression at quality 90, 70, 50, and 30.
-- Brightness and contrast adjustments.
-- Saturation changes.
-- PNG/JPEG format conversion.
-- Horizontal and vertical flips.
-- Gaussian noise.
-- Screenshot simulation using JPEG degradation and slight blur.
-- Generative fill simulation using OpenCV inpainting over center and corner masks.
-- Bicubic AI-upscaling simulation at 2x and 4x.
-- Combined attacks mixing 2 to 3 edits.
+- Completed at: `2026-06-10T13:06:11Z`
+- Images processed: `30`
+- Attack variants per image: `31`
+- SecurePixel API URL: `http://127.0.0.1:3000`
+- SecurePixel skipped: `False`
 
 ### Methodology
 
-SecurePixel is measured through the actual REST API instead of calling internals directly. Each detection record includes:
+The benchmark reads original images from `benchmark-images/`, uploads each original through `/upload`, generates tampered variants, runs those variants through `/detect`, and compares SecurePixel against ImageHash, SSIM, and OpenCV template matching baselines.
 
-- Whether SecurePixel detected the image.
-- Which layer caught it: watermark, perceptual hash, or embedding similarity.
-- Confidence or similarity score when returned by the API.
-- End-to-end detection latency in milliseconds.
-- Attack type and severity.
+Attack coverage includes crop, resize, JPEG compression, brightness, contrast, saturation, format conversion, horizontal and vertical flips, gaussian noise, screenshot simulation, OpenCV inpainting as a generative-fill proxy, bicubic upscaling, and combination attacks.
 
-Baselines are measured locally against the same generated tampered image:
+SecurePixel is measured through the actual REST API. Each record includes detection status, layer, confidence or similarity score, latency, attack type, and severity. Baselines are measured locally against the same generated tampered images.
 
-- ImageHash is counted as detected when any hash distance is less than or equal to `10`.
-- SSIM is counted as detected when score is greater than or equal to `0.55`.
-- OpenCV template matching is counted as detected when normalized match score is greater than or equal to `0.55`.
+- ImageHash threshold: Hamming distance <= `10`
+- SSIM threshold: score >= `0.55`
+- OpenCV template threshold: score >= `0.55`
 
-These thresholds are intentionally simple and are recorded in `raw_results.json` so results can be reinterpreted later without rerunning the suite.
+Raw reusable output is written to `benchmarks/results/raw_results.json`. Machine-readable summary output is written to `benchmarks/results/summary.json`.
 
-### Summary table
-
-After running `npm run benchmark`, the generated summary at `benchmarks/results/summary.md` contains the concrete detection-rate table. The expected table shape is:
+### Detection rate by attack type
 
 | Attack type | SecurePixel | ImageHash | SSIM | OpenCV template | Samples |
 |---|---:|---:|---:|---:|---:|
-| crop | generated | generated | generated | generated | generated |
-| resize | generated | generated | generated | generated | generated |
-| jpeg_compression | generated | generated | generated | generated | generated |
-| brightness | generated | generated | generated | generated | generated |
-| contrast | generated | generated | generated | generated | generated |
-| saturation | generated | generated | generated | generated | generated |
-| format_conversion | generated | generated | generated | generated | generated |
-| flip | generated | generated | generated | generated | generated |
-| gaussian_noise | generated | generated | generated | generated | generated |
-| screenshot_simulation | generated | generated | generated | generated | generated |
-| generative_fill_simulation | generated | generated | generated | generated | generated |
-| ai_upscale_simulation | generated | generated | generated | generated | generated |
-| combined_attack | generated | generated | generated | generated | generated |
+| ai_upscale_simulation | 100.0% | 100.0% | 100.0% | 100.0% | 60 |
+| brightness | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| combined_attack | 100.0% | 48.9% | 42.2% | 28.9% | 90 |
+| contrast | 100.0% | 100.0% | 100.0% | 100.0% | 60 |
+| crop | 100.0% | 15.6% | 11.1% | 54.4% | 90 |
+| flip | 100.0% | 3.3% | 6.7% | 5.0% | 60 |
+| format_conversion | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| gaussian_noise | 97.8% | 100.0% | 100.0% | 100.0% | 90 |
+| generative_fill_simulation | 96.7% | 100.0% | 100.0% | 100.0% | 60 |
+| jpeg_compression | 97.5% | 100.0% | 100.0% | 100.0% | 120 |
+| resize | 100.0% | 100.0% | 100.0% | 50.0% | 90 |
+| saturation | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| screenshot_simulation | 100.0% | 100.0% | 100.0% | 100.0% | 30 |
 
 ### Leaderboard
 
-After running the suite, the generated leaderboard ranks systems by total detection rate:
-
 | Rank | System | Detection rate |
 |---:|---|---:|
-| 1 | generated | generated |
-| 2 | generated | generated |
-| 3 | generated | generated |
-| 4 | generated | generated |
+| 1 | securepixel | 98.9% |
+| 2 | imagehash | 80.7% |
+| 3 | ssim | 79.8% |
+| 4 | opencv_template | 77.7% |
 
-### Generated graphs
+### SecurePixel layer contribution
 
-The runner saves the following graphs:
+| Layer | Detected samples |
+|---|---:|
+| unknown | 31 |
+| embedding_similarity | 90 |
+| perceptual_hash | 584 |
+| watermark | 215 |
+
+### Graphs
 
 ![SecurePixel detection rate by attack type](benchmarks/results/graphs/securepixel_detection_rate_by_attack.png)
 
@@ -820,16 +761,47 @@ The runner saves the following graphs:
 
 ![Combined vs single attack detection rate](benchmarks/results/graphs/combined_vs_single_attack_detection_rate.png)
 
-### Interpreting results
+### Interpretation
 
-Expected interpretation patterns:
+SecurePixel led this benchmark run with an overall detection rate of 98.9%. SecurePixel performed best on `ai_upscale_simulation` at 100.0% and struggled most on `generative_fill_simulation` at 96.7%. The dominant SecurePixel layer was `perceptual_hash`, which shows which part of the layered pipeline carried most detections in this run. Generative fill simulation averaged 96.7%, which should be treated as a hard case because it changes image content rather than only metadata, encoding, color, or scale. Combined attacks detected at 100.0% compared with 98.8% for single attacks, showing how detection degrades when edits are stacked.
 
-- SecurePixel should handle format conversion, moderate compression, resizing, and screenshot-like degradation better than metadata-based approaches because detection is based on watermark extraction, pHash matching, and CLIP embeddings.
-- Watermark detection should dominate when the secured derivative survives the edit.
-- pHash should carry many visually similar edits where the watermark is damaged but the image remains spatially close.
-- Embedding similarity should matter most for heavier edits and derivative-like transformations.
-- Generative fill should be treated as the hardest benchmark category because it changes image content rather than only encoding, geometry, or color.
-- Classical baselines are useful comparison points, but they are not ownership systems. They do not verify creator identity or resolve matches through the PostgreSQL ownership model.
+### Running the benchmark
+
+Install Python benchmark dependencies:
+
+```bash
+pip install -r benchmarks/requirements.txt
+```
+
+Run the full suite:
+
+```bash
+BENCHMARK_API_URL=http://127.0.0.1:3000 \
+BENCHMARK_EMAIL=<verified-user-email> \
+BENCHMARK_PASSWORD=<verified-user-password> \
+npm run benchmark
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:BENCHMARK_API_URL="http://127.0.0.1:3000"
+$env:BENCHMARK_EMAIL="<verified-user-email>"
+$env:BENCHMARK_PASSWORD="<verified-user-password>"
+npm run benchmark
+```
+
+Optional controls:
+
+```bash
+npm run benchmark -- --limit 10
+npm run benchmark -- --skip-securepixel
+npm run benchmark -- --access-token <jwt-access-token>
+npm run benchmark -- --delay-seconds 9.1
+```
+
+The default delay of `9.1` seconds keeps SecurePixel API calls below 400 requests per hour.
+<!-- BENCHMARKS:END -->
 
 ## Environment Variables
 
