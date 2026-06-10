@@ -525,7 +525,10 @@ def is_securepixel_detected(status: int, body: dict[str, Any]) -> bool:
     if status == 429:
         return False
     message = str(body.get("message", "")).lower()
-    if "duplicate" in message or "derivative" in message or "own registered image" in message:
+    # Negative case: "No duplicates found. Image is unique." must NOT match
+    if "no duplicates found" in message:
+        return False
+    if "duplicate detected" in message or "suspected derivative detected" in message or "own registered image" in message:
         return True
     return False
 
@@ -533,12 +536,14 @@ def is_securepixel_detected(status: int, body: dict[str, Any]) -> bool:
 def classify_securepixel_layer(body: dict[str, Any]) -> str | None:
     method = str(body.get("method", "")).lower()
     message = str(body.get("message", "")).lower()
-    combined = f"{method} {message}"
-    if "layer 1" in combined or "watermark" in combined:
+    # Layer 1 - Watermark
+    if "layer 1" in message or "watermarking" in method:
         return "watermark"
-    if "layer 2" in combined or "perceptual" in combined or "phash" in combined:
+    # Layer 2 - Perceptual Hash
+    if "layer 2" in message or "perceptual hashing" in method:
         return "perceptual_hash"
-    if "layer 3" in combined or "clip" in combined or "embedding" in combined or "vector" in combined:
+    # Layer 3 - CLIP Embedding
+    if "layer 3" in message or "clip embedding" in method:
         return "embedding_similarity"
     return None
 

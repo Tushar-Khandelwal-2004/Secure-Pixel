@@ -689,7 +689,7 @@ SecurePixel includes a reproducible benchmark suite for measuring the detection 
 
 ### Latest benchmark run
 
-- Completed at: `2026-06-10T13:06:11Z`
+- Completed at: `2026-06-10T14:19:56Z`
 - Images processed: `30`
 - Attack variants per image: `31`
 - SecurePixel API URL: `http://127.0.0.1:3000`
@@ -715,23 +715,23 @@ Raw reusable output is written to `benchmarks/results/raw_results.json`. Machine
 |---|---:|---:|---:|---:|---:|
 | ai_upscale_simulation | 100.0% | 100.0% | 100.0% | 100.0% | 60 |
 | brightness | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
-| combined_attack | 100.0% | 48.9% | 42.2% | 28.9% | 90 |
-| contrast | 100.0% | 100.0% | 100.0% | 100.0% | 60 |
-| crop | 100.0% | 15.6% | 11.1% | 54.4% | 90 |
+| combined_attack | 96.7% | 48.9% | 42.2% | 28.9% | 90 |
+| contrast | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| crop | 68.9% | 15.6% | 11.1% | 54.4% | 90 |
 | flip | 100.0% | 3.3% | 6.7% | 5.0% | 60 |
-| format_conversion | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
+| format_conversion | 100.0% | 100.0% | 100.0% | 100.0% | 60 |
 | gaussian_noise | 97.8% | 100.0% | 100.0% | 100.0% | 90 |
-| generative_fill_simulation | 96.7% | 100.0% | 100.0% | 100.0% | 60 |
+| generative_fill_simulation | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
 | jpeg_compression | 97.5% | 100.0% | 100.0% | 100.0% | 120 |
 | resize | 100.0% | 100.0% | 100.0% | 50.0% | 90 |
 | saturation | 98.3% | 100.0% | 100.0% | 100.0% | 60 |
-| screenshot_simulation | 100.0% | 100.0% | 100.0% | 100.0% | 30 |
+| screenshot_simulation | 96.7% | 100.0% | 100.0% | 100.0% | 30 |
 
 ### Leaderboard
 
 | Rank | System | Detection rate |
 |---:|---|---:|
-| 1 | securepixel | 98.9% |
+| 1 | securepixel | 95.6% |
 | 2 | imagehash | 80.7% |
 | 3 | ssim | 79.8% |
 | 4 | opencv_template | 77.7% |
@@ -740,10 +740,9 @@ Raw reusable output is written to `benchmarks/results/raw_results.json`. Machine
 
 | Layer | Detected samples |
 |---|---:|
-| unknown | 31 |
 | embedding_similarity | 90 |
-| perceptual_hash | 584 |
-| watermark | 215 |
+| perceptual_hash | 589 |
+| watermark | 210 |
 
 ### Graphs
 
@@ -763,7 +762,7 @@ Raw reusable output is written to `benchmarks/results/raw_results.json`. Machine
 
 ### Interpretation
 
-SecurePixel led this benchmark run with an overall detection rate of 98.9%. SecurePixel performed best on `ai_upscale_simulation` at 100.0% and struggled most on `generative_fill_simulation` at 96.7%. The dominant SecurePixel layer was `perceptual_hash`, which shows which part of the layered pipeline carried most detections in this run. Generative fill simulation averaged 96.7%, which should be treated as a hard case because it changes image content rather than only metadata, encoding, color, or scale. Combined attacks detected at 100.0% compared with 98.8% for single attacks, showing how detection degrades when edits are stacked.
+SecurePixel led this benchmark run with an overall detection rate of 95.6%. SecurePixel performed best on `ai_upscale_simulation` at 100.0% and struggled most on `crop` at 68.9%. The dominant SecurePixel layer was `perceptual_hash`, which shows which part of the layered pipeline carried most detections in this run. Generative fill simulation averaged 98.3%, which should be treated as a hard case because it changes image content rather than only metadata, encoding, color, or scale. Combined attacks detected at 96.7% compared with 95.5% for single attacks, showing how detection degrades when edits are stacked.
 
 ### Running the benchmark
 
@@ -802,6 +801,8 @@ npm run benchmark -- --delay-seconds 9.1
 
 The default delay of `9.1` seconds keeps SecurePixel API calls below 400 requests per hour.
 <!-- BENCHMARKS:END -->
+
+
 
 ## Environment Variables
 

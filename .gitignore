@@ -68,3 +68,10 @@ BACKEND_INTEGRATION_GUIDE.md
 BEGINNER_BACKEND_DEPLOYMENT_GUIDE.md
 venv/
 __pycache__/
+
+# ================================
+# Benchmark
+# ================================
+benchmark-images/
+benchmarks/results/generated/
+benchmarks/results/protected_sources/

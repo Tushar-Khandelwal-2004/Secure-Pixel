@@ -1,8 +1,8 @@
 {
   "metadata": {
     "suite": "SecurePixel detection benchmark",
-    "started_at": "2026-06-10T12:41:08Z",
-    "completed_at": "2026-06-10T13:06:11Z",
+    "started_at": "2026-06-10T13:55:14Z",
+    "completed_at": "2026-06-10T14:19:56Z",
     "api_url": "http://127.0.0.1:3000",
     "images_dir": "C:\\TypeScript\\SecurePixel\\benchmark-images",
     "image_count": 30,
@@ -32,21 +32,21 @@
     },
     "combined_attack": {
       "count": 90,
-      "securepixel": 1.0,
+      "securepixel": 0.9667,
       "imagehash": 0.4889,
       "ssim": 0.4222,
       "opencv_template": 0.2889
     },
     "contrast": {
       "count": 60,
-      "securepixel": 1.0,
+      "securepixel": 0.9833,
       "imagehash": 1.0,
       "ssim": 1.0,
       "opencv_template": 1.0
     },
     "crop": {
       "count": 90,
-      "securepixel": 1.0,
+      "securepixel": 0.6889,
       "imagehash": 0.1556,
       "ssim": 0.1111,
       "opencv_template": 0.5444
@@ -60,7 +60,7 @@
     },
     "format_conversion": {
       "count": 60,
-      "securepixel": 0.9833,
+      "securepixel": 1.0,
       "imagehash": 1.0,
       "ssim": 1.0,
       "opencv_template": 1.0
@@ -74,7 +74,7 @@
     },
     "generative_fill_simulation": {
       "count": 60,
-      "securepixel": 0.9667,
+      "securepixel": 0.9833,
       "imagehash": 1.0,
       "ssim": 1.0,
       "opencv_template": 1.0
@@ -102,43 +102,42 @@
     },
     "screenshot_simulation": {
       "count": 30,
-      "securepixel": 1.0,
+      "securepixel": 0.9667,
       "imagehash": 1.0,
       "ssim": 1.0,
       "opencv_template": 1.0
     }
   },
   "leaderboard": {
-    "securepixel": 0.9892,
+    "securepixel": 0.9559,
     "imagehash": 0.8065,
     "ssim": 0.7978,
     "opencv_template": 0.7774
   },
   "securepixel_layer_counts": {
-    "unknown": 31,
     "embedding_similarity": 90,
-    "perceptual_hash": 584,
-    "watermark": 215
+    "perceptual_hash": 589,
+    "watermark": 210
   },
   "by_severity": {
     "jpeg_compression": {
       "quality_30": 1.0,
-      "quality_50": 0.9667,
-      "quality_70": 1.0,
+      "quality_50": 1.0,
+      "quality_70": 0.9667,
       "quality_90": 0.9333
     },
     "crop": {
-      "25_percent_center": 1.0,
-      "50_percent_center": 1.0,
+      "25_percent_center": 0.2,
+      "50_percent_center": 0.8667,
       "75_percent_center": 1.0
     }
   },
   "generative_fill": {
     "center_patch": 0.9667,
-    "corner_patch": 0.9667
+    "corner_patch": 1.0
   },
   "combined_vs_single": {
-    "single_attack": 0.9881,
-    "combined_attack": 1.0
+    "single_attack": 0.9548,
+    "combined_attack": 0.9667
   }
 }
